@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "How to Excel at Engineering"
-date:   2021-05-02   00:00:01
+date:   2021-05-02
 
 ---
 

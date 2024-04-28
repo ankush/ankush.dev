@@ -2,7 +2,7 @@
 layout: post
 title:  "Parsing 140 gigabytes of chess games without compute clusters"
 subtitle: "or why you should learn unix shell tools"
-date:   2021-08-28   00:00:01
+date:   2021-08-28
 ---
 
 Ok, "parsing" might be an exaggeration here but hear me out.

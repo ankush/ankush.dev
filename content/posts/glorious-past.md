@@ -2,7 +2,7 @@
 layout: post
 title:  "On our glorious past"
 subtitle: "We were not alone!"
-date:   2021-09-14   00:00:01
+date:  2021-09-14
 ---
 
 If you've been on the interwebs for the past decade, you've probably come across a post about our glorious past, sometimes about mythical planes and sometimes about the cryptic calculation of speed of light in Vedas.

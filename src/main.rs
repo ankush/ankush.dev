@@ -1,8 +1,10 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::{response::Html, routing::get, Router};
+use chrono::NaiveDate;
 use minijinja::{context, Environment};
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::fs::{self, DirEntry};
 use std::sync::Arc;
 
@@ -45,9 +47,11 @@ fn get_jenv() -> Environment<'static> {
 
 fn read_posts() -> Vec<Post> {
     let post_files = fs::read_dir(POSTS_DIR).expect("Invalid content directory");
-    post_files
+    let mut posts: Vec<Post> = post_files
         .map(|file| file.unwrap().try_into().unwrap())
-        .collect()
+        .collect();
+    posts.sort_by_key(|p| Reverse(p.meta.date));
+    posts
 }
 
 async fn homepage(State(state): State<Arc<AppState>>) -> Result<Html<String>, StatusCode> {
@@ -95,6 +99,7 @@ struct Post {
 struct PostMeta {
     title: String,
     external_url: Option<String>,
+    date: NaiveDate,
 }
 
 impl From<DirEntry> for Post {

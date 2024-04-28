@@ -2,7 +2,7 @@
 layout: post
 title:  "On mastery, cycling and mental health"
 # subtitle: "Story of my transition to Computer Science"
-date:   2018-11-25   16:00:01
+date:   2018-11-25
 ---
 
 

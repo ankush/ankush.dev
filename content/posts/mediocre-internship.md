@@ -2,7 +2,7 @@
 layout: post
 title:  "How a mediocre internship shaped my life."
 subtitle: "Story of my transition to Computer Science"
-date:   2018-01-31   16:00:01
+date:   2018-01-31
 ---
 
 ![Ryan The Temp](/assets/images/ryantemp.gif)
