@@ -6,7 +6,7 @@
 
 {% for post in posts %}
 <ul>
-    <li><a href="/p/{{ post.slug}}" >{{ post.slug }}</a></li>
+    <li><a href="/p/{{ post.slug}}" >{{ post.meta.title }}</a></li>
 </ul>
 {% endfor %}
 

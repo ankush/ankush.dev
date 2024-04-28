@@ -2,7 +2,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::{response::Html, routing::get, Router};
 use minijinja::{context, Environment};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, DirEntry};
 use std::sync::Arc;
 
@@ -88,14 +88,32 @@ async fn get_posts(
 struct Post {
     slug: String,
     raw_content: String,
+    meta: PostMeta,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct PostMeta {
+    title: String,
 }
 
 impl From<DirEntry> for Post {
     fn from(value: DirEntry) -> Self {
         let file_path = value.file_name().to_str().unwrap().to_string();
         let slug = file_path.strip_suffix(".md").unwrap().to_string();
-        let raw_content = fs::read_to_string(value.path()).expect("Content should be present in file");
+        let raw_content =
+            fs::read_to_string(value.path()).expect("Content should be present in file");
+        let meta = get_frontmatter(&raw_content);
 
-        Post { slug, raw_content }
+        Post {
+            slug,
+            raw_content,
+            meta,
+        }
     }
+}
+
+fn get_frontmatter(md: &str) -> PostMeta {
+    let splits: Vec<_> = md.split("---").collect();
+    let frontmatter = splits[1];
+    serde_yaml::from_str(&frontmatter).expect("Invalid frontmatter")
 }
