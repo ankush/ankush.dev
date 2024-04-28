@@ -94,6 +94,7 @@ struct Post {
 #[derive(Debug, Deserialize, Serialize)]
 struct PostMeta {
     title: String,
+    external_url: Option<String>,
 }
 
 impl From<DirEntry> for Post {
@@ -102,7 +103,10 @@ impl From<DirEntry> for Post {
         let slug = file_path.strip_suffix(".md").unwrap().to_string();
         let raw_content =
             fs::read_to_string(value.path()).expect("Content should be present in file");
-        let meta = get_frontmatter(&raw_content);
+
+        let sections: Vec<_> = raw_content.split("---").collect();
+        let frontmatter = sections[1];
+        let meta = serde_yaml::from_str(&frontmatter).expect("Invalid Frontmatter");
 
         Post {
             slug,
@@ -110,10 +114,4 @@ impl From<DirEntry> for Post {
             meta,
         }
     }
-}
-
-fn get_frontmatter(md: &str) -> PostMeta {
-    let splits: Vec<_> = md.split("---").collect();
-    let frontmatter = splits[1];
-    serde_yaml::from_str(&frontmatter).expect("Invalid frontmatter")
 }

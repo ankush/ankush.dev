@@ -6,7 +6,11 @@
 
 {% for post in posts %}
 <ul>
-    <li><a href="/p/{{ post.slug}}" >{{ post.meta.title }}</a></li>
+	{% if post.meta.external_url %}
+		<li><a href="{{ post.meta.external_url }}" >{{ post.meta.title }}</a></li>
+	{% else %}
+		<li><a href="/p/{{ post.slug}}" >{{ post.meta.title }}</a></li>
+	{% endif %}
 </ul>
 {% endfor %}
 
