@@ -91,7 +91,7 @@ async fn get_posts(
 #[derive(Debug, Serialize)]
 struct Post {
     slug: String,
-    raw_content: String,
+    content: String,
     meta: PostMeta,
 }
 
@@ -111,11 +111,14 @@ impl From<DirEntry> for Post {
 
         let sections: Vec<_> = raw_content.split("---").collect();
         let frontmatter = sections[1];
+        let body = sections[2..].join("");
         let meta = serde_yaml::from_str(&frontmatter).expect("Invalid Frontmatter");
+
+        let content = markdown::to_html(&body);
 
         Post {
             slug,
-            raw_content,
+            content,
             meta,
         }
     }

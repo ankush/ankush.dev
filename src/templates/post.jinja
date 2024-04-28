@@ -1,7 +1,7 @@
 {% extends "layout" %}
 {% block title %}{{ super() }} | {{ title }} {% endblock %}
 {% block body %}
-<h1>{{ post.slug }}</h1>
+<h1>{{ post.meta.title }}</h1>
 
-<pre>{{ post.raw_content }}</pre>
+{{ post.content }}
 {% endblock %}
