@@ -1,10 +1,7 @@
 {% extends "layout" %}
 {% block title %}{{ super() }} | {{ title }} {% endblock %}
 {% block body %}
-<h1>{{ title }}</h1>
-{% for data_entry in entries %}
-<ul>
-    <li>{{ data_entry }}</li>
-</ul>
-{% endfor %}
+<h1>{{ post.slug }}</h1>
+
+<pre>{{ post.raw_content }}</pre>
 {% endblock %}
