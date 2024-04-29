@@ -1,7 +1,9 @@
 {% extends "layout" %}
-{% block title %}{{ super() }} | {{ title }} {% endblock %}
+{% block title %} {{ post.meta.title }} | {{ super() }} {% endblock %}
 {% block body %}
-<h1>{{ post.meta.title }}</h1>
-
+<header><h1>{{ post.meta.title }}</h1></header>
+<p>Written on {{ post.meta.date }}</p>
+<article>
 {{ post.content }}
+</article>
 {% endblock %}

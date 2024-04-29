@@ -1,7 +1,38 @@
 <!doctype html>
 <html>
-  <head><title>{% block title %}Ankush Menat's Blog{% endblock %}</title></head>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="color-scheme" content="light dark" />
+    <title>{% block title %}Ankush Menat's Blog{% endblock %}</title>
+    <style>
+    {% block style %}
+    /* dracula colours */
+    body {
+      max-width: 880px;
+      margin: 48px auto;
+      padding: 0 40px;
+    }
+    {% endblock %}
+    </style>
+
+  </head>
+
   <body>
+    <nav>
+      <a href="/"><h3>Ankush Menat's Blog</h3></a>
+    </nav>
+    <hr>
+  <main>
     {% block body %}{% endblock %}
+
+    <hr>
+  <footer>
+    <nav>
+      <a href="https://github.com/ankush">GitHub</a> ·
+      <a href="mailto:me@ankush.dev">Email</a>
+    </nav>
+  </footer>
+  </main>
   </body>
 </html>
