@@ -7,8 +7,26 @@ services:
     volumes:
       - content:/opt/blog/content:rw
     working_dir: /opt/blog/
+    restart: always
     ports:
       - "3000:3000"
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - content:/data/
+    environment:
+      DOMAIN: "https://ankush.dev"
+      EMAIL: "ankushmenat@gmail.com"
+      LOG_FILE: "/data/access.log"
+
+
 volumes:
   content:
     driver: local
