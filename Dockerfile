@@ -14,5 +14,6 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR app
-COPY --from=builder /app/target/release/ankush_dev /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/ankush_dev"]
+RUN mkdir -p /opt/blog/content
+COPY --from=builder /app/target/release/ankush_dev /opt/blog/bin
+ENTRYPOINT ["/opt/blog/bin"]

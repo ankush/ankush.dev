@@ -1,0 +1,18 @@
+name: ankush_dev
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - content:/opt/blog/content:rw
+    working_dir: /opt/blog/
+    ports:
+      - "3000:3000"
+volumes:
+  content:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./content
