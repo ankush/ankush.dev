@@ -20,7 +20,7 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - content:/data/
+      - content:/content
     environment:
       DOMAIN: "https://ankush.dev"
       EMAIL: "ankushmenat@gmail.com"

@@ -33,7 +33,7 @@ The most important thing to remember is: code is not a piece of text, it's a tre
                 (+)   a    b
 ```
 
-<center><figcaption>Mmmm, LISPy. λ</figcaption></center>
+Mmmm, LISPy. λ
 
 This code, when represented as tree removes lots of noise in the text that's irrelevant e.g. whitespace, newlines.
 
