@@ -26,6 +26,16 @@
       white-space: pre-wrap;
       width: 100%;
     }
+    nav {
+      text-align: center;
+    }
+    blockquote {
+      border-left: 2px solid;
+      padding: 0 10px;
+    }
+    blockquote p {
+      font-style: italic;
+    }
     {% endblock %}
     </style>
   </head>
@@ -40,9 +50,10 @@
     <hr>
   <footer>
     <nav>
-      <a href="https://github.com/ankush">GitHub</a> ·
+      <a target="_blank" href="https://github.com/ankush">GitHub</a> ·
       <a href="mailto:me@ankush.dev">Email</a> ·
-      <a href="/assets/resume.pdf">Resume</a>
+      <a target="_blank" href="/assets/resume.pdf">Resume</a> ·
+      <a target="_blank" href="{% block source %}https://github.com/ankush/ankush.dev{% endblock %}">Source</a>
     </nav>
   </footer>
   </main>
