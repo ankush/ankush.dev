@@ -59,7 +59,7 @@ async fn homepage(State(state): State<Arc<AppState>>) -> Result<Html<String>, St
 
     let rendered = template
         .render(context! {
-            title => "Ankush Menat's Blog",
+            title => "Blog",
             posts => state.posts,
         })
         .unwrap();

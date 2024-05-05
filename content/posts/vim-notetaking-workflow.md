@@ -8,7 +8,7 @@ date:   2020-11-09
 
 I have been working on a system for notetaking and basic task management. At this point I feel I have perfected the notetaking part but need to work more on the task management aspect of the system. So I though I should document my thoughts.
 
-## Requirements for designing my current system.
+### Requirements for designing my current system.
 
 - **Portability.** No proprietary or vendor specific data formats allowed.
 - **Speed > Quality.** Should be able to take notes and edit them at speed of thought. Aligns with Vim philosophy.
@@ -17,11 +17,11 @@ I have been working on a system for notetaking and basic task management. At thi
 - **Visibility** - Make it VERY easy to decide what needs to be done next.
 
 
-## Implementation
-### Plain text markdown files.
+### Implementation
+#### Plain text markdown files.
 What is more portable than plain text files? Add some basic markdown support and now you've got 90% of what you need to take quick notes. The editor of choice for me was Neovim.
 
-### Speed
+#### Speed
 Vim is designed for super fast text editing. VimWiki plugin takes care of dynamically creating new files and linking them.
 VimWiki also has a diary feature which I've utilized to create daily files. I use a calendar plugin to jump to future/past dates.
 
@@ -40,10 +40,10 @@ autocmd BufNewFile */wiki/diary/[0-9]*.md :read ~/wiki/diary/templates/template.
 
 I have also memorized typical vimwiki keyboard shortcuts. You should definitely consider doing and reading the manual that if you intend to use it for long time. `:h vimwiki`
 
-### Searchability
+#### Searchability
 I use [fzf](https://github.com/junegunn/fzf.vim) for fuzzy finding along with [ripgrep](https://github.com/BurntSushi/ripgrep) in Vim. I tend to vaguely remember where I need to jump to. A fuzzy finder like FZF makes this job very easy for me. This made even more sense since I use it a lot while programming too.
 
-### Visibility
+#### Visibility
 I use bunch of shell scripts to extract tasks from my files. One such example is using bash script to extract checklist form today's diary page and show it as conky widget on desktop. So whenever I've closed all windows, I will clearly see what's coming next. Following snippet gets all the lines with unchecked boxes from today's diary entry.
 
 ```bash

@@ -9,7 +9,7 @@ If you've been on the interwebs for the past decade, you've probably come across
 
 If you know me at all, you've probably found me arguing against that crap. By now, you've probably also added a mental filter to remove this from your feed as such baseless claims of grandeur are usually made for *compensating* and rarely with any scientific interest.
 
-## But we *did* have a glorious past
+### But we *did* have a glorious past
 
 Maybe, we didn't have mythical planes but we did have a glorious past! Just like many other countries. To list few examples:
 
@@ -18,7 +18,7 @@ Maybe, we didn't have mythical planes but we did have a glorious past! Just like
 - Now lost knowledge of material sciences/metallurgy was once best in class, some of which is *STILL* not reproducible.
 
 
-## Technology degrades and eventually fades away
+### Technology degrades and eventually fades away
 
 That's right, any civilization that fails to pass on the knowledge will eventually lose the progress made. There are many examples of this, and India isn't an exception here.
 
@@ -27,7 +27,7 @@ That's right, any civilization that fails to pass on the knowledge will eventual
 
 
 
-## Why is this so popular then
+### Why is this so popular then
 
 I've spent way too much time trying to find sources of popular inventions from our grand pasts. I've usually found some wacky journal articles or blog posts as source of the myth. While the original piece is often intended to spark a conversation and investigate further, such articles usually result in pop-science articles and then devolve into WhatsApp forwards, at which point they've lost all the scepticism that was present in the source material.
 
@@ -40,7 +40,7 @@ This quote perfectly sums it up:
 
 
 
-## TL;DR
+### TL;DR
 
 - Reading about other's "glorious past" is an humbling experience. Claiming grandeur won't get us anywhere. The only way "lost knowledge" can help us if we are able to decipher it and reclaim it somehow.
 
@@ -49,7 +49,7 @@ This quote perfectly sums it up:
 - Studying the lost technologies, studying the reasons for the degradation of such technologies and preserving our current knowledge is required but not at cost of losing basic scientific integrity.
 
 
-## Credit
+### Credit
 
 This is largely inspired by Jonathan Blow's talk ["Preventing the Collapse of Civilization"](https://www.youtube.com/watch?v=pW-SOdj4Kkk). Though that talk is mostly about software engineering, if you liked this post, you'll probably love that talk!
 
