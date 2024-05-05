@@ -5,37 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="color-scheme" content="light dark" />
     <title>{% block title %}Ankush Menat{% endblock %}</title>
+    {% block meta %}{% endblock %}
     <style>
     {% block style %}
-    body {
-      max-width: 760px;
-      margin: 48px auto;
-      padding: 0 10px;
-    }
-    body > main > ul {
-      list-style-type: none;
-      padding: 0;
-    }
-    body > main > ul > li {
-      display: flex;
-    }
-    body > main > ul > li > time {
-      padding-right: 1em;
-    }
-    pre {
-      white-space: pre-wrap;
-      width: 100%;
-    }
-    nav {
-      text-align: center;
-    }
-    blockquote {
-      border-left: 2px solid;
-      padding: 0 10px;
-    }
-    blockquote p {
-      font-style: italic;
-    }
+    body { max-width: 760px; margin: 48px auto; padding: 0 10px; }
+    main > ul { list-style-type: none; padding: 0; }
+    main > ul > li { display: flex; }
+    main > ul > li > time { min-width: 4em; }
+    pre { white-space: pre-wrap; width: 100%; }
+    nav { text-align: center; }
+    blockquote { border-left: 2px solid; padding: 0 10px; }
+    blockquote p { font-style: italic; }
     {% endblock %}
     </style>
   </head>

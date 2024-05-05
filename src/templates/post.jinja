@@ -1,8 +1,16 @@
 {% extends "layout" %}
 {% block title %} {{ post.meta.title }} | {{ super() }} {% endblock %}
+
+{% block meta %}
+	<meta property="og:title" content="{{ post.meta.title }}" />
+	<meta property="og:type" content="article" />
+	<meta property="og:description" content="{{ post.meta.subtitle }} " />
+{% endblock %}
+
 {% block body %}
 <header><h2>{{ post.meta.title }}</h2></header>
 <p>Written on {{ post.meta.date }}</p>
+
 <article>
 {{ post.content }}
 </article>

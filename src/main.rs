@@ -109,6 +109,7 @@ struct PostMeta {
     title: String,
     external_url: Option<String>,
     date: NaiveDate,
+    subtitle: Option<String>,
 }
 
 impl From<DirEntry> for Post {
