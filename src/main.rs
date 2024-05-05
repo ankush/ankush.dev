@@ -1,5 +1,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::Redirect;
 use axum::{response::Html, routing::get, Router};
 use chrono::NaiveDate;
 use minijinja::{context, Environment};
@@ -25,6 +26,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(homepage))
         .route("/p/:slug", get(get_posts))
+        .route("/:year/:month/:day/:slug", get(redirect_old_routes))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -86,6 +88,13 @@ async fn get_posts(
         }
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+async fn redirect_old_routes(
+    Path((_, _, _, slug)): Path<(String, String, String, String)>,
+) -> Redirect {
+    let slug = slug.strip_suffix(".html").unwrap_or(&slug);
+    Redirect::permanent(&format!("/p/{slug}"))
 }
 
 #[derive(Debug, Serialize)]
