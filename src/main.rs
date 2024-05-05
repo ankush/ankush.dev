@@ -21,17 +21,16 @@ async fn main() {
     let env = get_jenv();
     let posts = read_posts();
 
-    let app_state = Arc::new(AppState { env, posts: posts });
+    let app_state = Arc::new(AppState { env, posts });
 
     let app = Router::new()
         .route("/", get(homepage))
         .route("/p/:slug", get(get_posts))
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
+        .fallback(not_found)
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
@@ -50,7 +49,7 @@ fn get_jenv() -> Environment<'static> {
 fn read_posts() -> Vec<Post> {
     let post_files = fs::read_dir(POSTS_DIR).expect("Invalid content directory");
     let mut posts: Vec<Post> = post_files
-        .map(|file| file.unwrap().try_into().unwrap())
+        .map(|file| file.unwrap().into())
         .collect();
     posts.sort_by_key(|p| Reverse(p.meta.date));
     posts
@@ -90,6 +89,10 @@ async fn get_posts(
     }
 }
 
+async fn not_found() -> (StatusCode, &'static str) {
+    (StatusCode::NOT_FOUND, "Page not found")
+}
+
 async fn redirect_old_routes(
     Path((_, _, _, slug)): Path<(String, String, String, String)>,
 ) -> Redirect {
@@ -122,7 +125,7 @@ impl From<DirEntry> for Post {
         let sections: Vec<_> = raw_content.split("---").collect();
         let frontmatter = sections[1];
         let body = sections[2..].join("");
-        let meta = serde_yaml::from_str(&frontmatter).expect("Invalid Frontmatter");
+        let meta = serde_yaml::from_str(frontmatter).expect("Invalid Frontmatter");
 
         let content = markdown::to_html(&body);
 
