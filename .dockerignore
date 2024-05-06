@@ -1,1 +1,4 @@
 /target
+
+# Avoid build cache miss for content changes
+content/
