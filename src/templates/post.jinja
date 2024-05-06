@@ -2,9 +2,9 @@
 {% block title %} {{ post.meta.title }} | {{ super() }} {% endblock %}
 
 {% block meta %}
-	<meta property="og:title" content="{{ post.meta.title }}" />
-	<meta property="og:type" content="article" />
-	<meta property="og:description" content="{{ post.meta.subtitle }} " />
+	<meta property="og:title" content="{{ post.meta.title }}">
+	<meta property="og:type" content="article">
+	<meta property="og:description" content="{{ post.meta.subtitle }}">
 {% endblock %}
 
 {% block body %}
@@ -14,7 +14,6 @@
 <article>
 {{ post.content }}
 </article>
-
 {% endblock %}
 
 {% block source %}https://github.com/ankush/ankush.dev/blob/develop/content/posts/{{ post.slug }}.md{% endblock %}
