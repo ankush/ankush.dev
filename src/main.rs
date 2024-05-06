@@ -52,7 +52,7 @@ fn read_posts() -> Vec<Post> {
         .map(|file| file.unwrap().into())
         .collect();
     posts.sort_by_key(|p| Reverse(p.meta.date));
-    posts
+    posts.into_iter().filter(|p| p.meta.published.unwrap_or(true)).collect()
 }
 
 async fn homepage(State(state): State<Arc<AppState>>) -> Result<Html<String>, StatusCode> {
@@ -113,6 +113,7 @@ struct PostMeta {
     external_url: Option<String>,
     date: NaiveDate,
     subtitle: Option<String>,
+    published: Option<bool>,
 }
 
 impl From<DirEntry> for Post {
