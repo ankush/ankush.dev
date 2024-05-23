@@ -1,0 +1,31 @@
+name: CI
+
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo
+          key: cargo-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            cargo-${{ hashFiles('**/Cargo.toml') }}
+            cargo-
+
+      - name: Run tests
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          cargo build --verbose
+          cargo run &
+
+          curl -f localhost:3000 > /dev/null
+          curl -f localhost:3000/p/semgrep > /dev/null
