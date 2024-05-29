@@ -6,7 +6,7 @@ date:   2024-05-29
 ---
 
 
-As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted and the databases we use carry us for the most part. However, business apps don't have that luxury, which are always transactional in nature and have long-running transactions.
+As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted and the databases we use carry us for the most part. Concurrency bugs are rare when you just have small or no transactions. However, business apps don't have that luxury, which are always transactional in nature and have long-running transactions.
 
 Once you hit a certain number of users, every scenario you think is "rare" will start occurring. You can choose to ignore and maybe manually patch it but that won't scale in the long term. You have to patch concurrency bugs, regardless of how rare they are.
 
@@ -122,7 +122,7 @@ As you can see because of "repeatable read", both users can't see each other's a
 | 8         |                                  | commit                              |
 
 
-"FOR UPDATE" gives you exclusive read lock on rows it reads AND non-existing rows it can potentially read by [locking gaps](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html#innodb-gap-locks) between data. This way you can be sure that no possible interleaving of these two transactions will ever cause invalid cache update.
+"FOR UPDATE" gives you exclusive read lock on rows it reads AND non-existing rows it can potentially read by [locking gaps](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html#innodb-gap-locks) between data. This way you can be sure that no possible interleaving of these two transactions will ever cause invalid update.
 
 
 Ref: https://github.com/frappe/frappe/pull/26592
@@ -131,7 +131,7 @@ Ref: https://github.com/frappe/frappe/pull/26592
 
 Let's look at something that involves DB and a separate cache like Redis. This method of drawing schedules still helps.
 
-A naive way to implement caching over a document would look something like this:
+A naive way to implement caching over a record would look something like this:
 
 ```
 def get_record(id):
@@ -139,8 +139,8 @@ def get_record(id):
     return record
 
 def get_cached_record(id):
-    cached_record = cache.get(id)  # Get from Cache
-    if not cached_record:          # Cache miss
+    record = cache.get(id)         # Get from Cache
+    if not record:                 # Cache miss
         record = get_record(id)    # Get from DB
         cache.set(id, record)      # Store in cache
     return record
@@ -167,7 +167,7 @@ Applying some imagination, we can come up with an interleaving that will cause s
 
 Repeatable Read strikes again. Because there is short delay between updating and committing changes to DB, some other transaction can read old data and store it in cache.
 
-Solution: Eviction has to happen _AFTER_ we have committed the changes. This way, cache will read stale values from DB.
+Solution: Eviction has to happen _AFTER_ we have committed the changes. This way, cache will not be populated by stale values.
 
 
 | Timestamp | UserA                            | User B                              |
