@@ -128,7 +128,7 @@ impl From<DirEntry> for Post {
         let body = sections[2..].join("");
         let meta = serde_yaml::from_str(frontmatter).expect("Invalid Frontmatter");
 
-        let content = markdown::to_html(&body);
+        let content = markdown::to_html_with_options(&body, &markdown::Options::gfm()).unwrap();
 
         Post {
             slug,
