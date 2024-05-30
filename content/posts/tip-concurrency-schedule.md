@@ -97,7 +97,7 @@ When two users simultaneously assign themselves to the same task, the assignees 
 | 1         | begin                         |                             |
 | 2         | insert_assignment(a)          | begin                       |
 | 3         | read_all() -> [a]             | insert_assignment(b)        |
-| 4         | update_assignee([a])          | read_all -> [b]             |
+| 4         | update_assignee([a])          | read_all() -> [b]           |
 | 5         | commit                        | update_assignee([b])        |
 | 6         |                               | commit                      |
 
@@ -147,7 +147,7 @@ def get_cached_record(id):
 
 def update_record(id, values):
     db.sql(f"update table where ...")  # Update in DB
-    cache.delete(id)                   # Evict cache
+    cache.delete(id)                   # invalidate cache
 ```
 
 At surface, this invalidation implementation seems reasonable. But what happens when this document is frequently updated and read? Is there any possible interleaving where invalidation will be incorrect?
@@ -162,12 +162,12 @@ Applying some imagination, we can come up with an interleaving that will cause s
 | 4         | clear_cache(x)                   | begin                               |
 | 5         |                                  | get_cache(x) -> miss                |
 | 6         |                                  | read(x)                             |
-| 7         | commit                           | **cache(x)**                        |
+| 7         | commit                           | **set_cache(x)**                    |
 | 8         |                                  | commit                              |
 
 Repeatable Read strikes again. Because there is short delay between updating and committing changes to DB, some other transaction can read old data and store it in cache.
 
-Solution: Eviction has to happen _AFTER_ we have committed the changes. This way, cache will not be populated by stale values.
+Solution: Invalidate has to happen _AFTER_ we have committed the changes. This way, cache will not be populated by stale values.
 
 
 | Timestamp | UserA                            | User B                              |
