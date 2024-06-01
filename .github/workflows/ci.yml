@@ -1,6 +1,8 @@
 name: CI
 
-on: push
+on:
+  pull_request:
+  push:
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,5 +29,5 @@ jobs:
           cargo build --verbose
           cargo run &
 
-          curl -f localhost:3000 > /dev/null
-          curl -f localhost:3000/p/semgrep > /dev/null
+          curl -vf localhost:3000
+          curl -vf localhost:3000/p/semgrep
