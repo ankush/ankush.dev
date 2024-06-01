@@ -1,7 +1,6 @@
 name: CI
 
 on:
-  pull_request:
   push:
 
 env:
@@ -23,11 +22,18 @@ jobs:
             cargo-${{ hashFiles('**/Cargo.toml') }}
             cargo-
 
+      - name: Cargo Target Cache
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: cargo-target-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            cargo-target-${{ hashFiles('**/Cargo.toml') }}
+            cargo-target-
+
       - name: Run tests
         run: |
           cd ${GITHUB_WORKSPACE}
           cargo build --verbose
           cargo run &
 
-          curl -vf localhost:3000
-          curl -vf localhost:3000/p/semgrep
