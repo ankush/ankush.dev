@@ -44,11 +44,11 @@ async fn main() {
 
 fn get_jenv() -> Environment<'static> {
     let mut env = Environment::new();
-    env.add_template("layout", include_str!("./templates/layout.jinja"))
+    env.add_template("layout", include_str!("./templates/layout.html"))
         .unwrap();
-    env.add_template("home", include_str!("./templates/home.jinja"))
+    env.add_template("home", include_str!("./templates/home.html"))
         .unwrap();
-    env.add_template("post", include_str!("./templates/post.jinja"))
+    env.add_template("post", include_str!("./templates/post.html"))
         .unwrap();
     env.add_template("feed", include_str!("./templates/feed.xml"))
         .unwrap();
