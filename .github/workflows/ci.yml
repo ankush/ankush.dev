@@ -1,6 +1,7 @@
 name: CI
 
-on: push
+on:
+  push:
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,11 +22,22 @@ jobs:
             cargo-${{ hashFiles('**/Cargo.toml') }}
             cargo-
 
+      - name: Cargo Target Cache
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: cargo-target-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            cargo-target-${{ hashFiles('**/Cargo.toml') }}
+            cargo-target-
+
       - name: Run tests
         run: |
           cd ${GITHUB_WORKSPACE}
           cargo build --verbose
           cargo run &
+          sleep 2
 
-          curl -f localhost:3000 > /dev/null
-          curl -f localhost:3000/p/semgrep > /dev/null
+          curl -vf http://localhost:3000 > /dev/null
+          curl -vf http://localhost:3000/p/semgrep > /dev/null
+          curl -vf http://localhost:3000/feed.xml > /dev/null
