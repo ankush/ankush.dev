@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Solving Concurrency Bugs Using Schedules and Imagination"
-subtitle: "Race conditions are hard, debugging them without right approach is even harder."
+description: "Race conditions are hard, debugging them without right approach is even harder."
 date:   2024-05-29
 ---
 

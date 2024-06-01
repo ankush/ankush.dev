@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Taking notes and managing tasks with Vim"
-subtitle: "My semi-finished VimWiki Frankenstein system"
+description: "My semi-finished VimWiki Frankenstein system"
 date:   2020-11-09
 ---
 

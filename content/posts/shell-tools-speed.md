@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Parsing 140 gigabytes of chess games without compute clusters"
-subtitle: "or why you should learn unix shell tools"
+description: "or why you should learn unix shell tools"
 date:   2021-08-28
 ---
 

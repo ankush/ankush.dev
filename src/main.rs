@@ -1,6 +1,6 @@
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::Redirect;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Redirect};
 use axum::{response::Html, routing::get, Router};
 use chrono::NaiveDate;
 use minijinja::{context, Environment};
@@ -8,6 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::fs::{self, DirEntry};
 use std::sync::Arc;
+
+#[cfg(debug_assertions)]
+const BASE_URL: &str = "http://localhost:3000";
+
+#[cfg(not(debug_assertions))]
+const BASE_URL: &str = "https://ankush.dev";
 
 struct AppState {
     env: Environment<'static>,
@@ -27,6 +33,7 @@ async fn main() {
         .route("/", get(homepage))
         .route("/p/:slug", get(get_posts))
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
+        .route("/feed.xml", get(atom_feed))
         .fallback(not_found)
         .with_state(app_state);
 
@@ -43,16 +50,19 @@ fn get_jenv() -> Environment<'static> {
         .unwrap();
     env.add_template("post", include_str!("./templates/post.jinja"))
         .unwrap();
+    env.add_template("feed", include_str!("./templates/feed.xml"))
+        .unwrap();
     env
 }
 
 fn read_posts() -> Vec<Post> {
     let post_files = fs::read_dir(POSTS_DIR).expect("Invalid content directory");
-    let mut posts: Vec<Post> = post_files
-        .map(|file| file.unwrap().into())
-        .collect();
+    let mut posts: Vec<Post> = post_files.map(|file| file.unwrap().into()).collect();
     posts.sort_by_key(|p| Reverse(p.meta.date));
-    posts.into_iter().filter(|p| p.meta.published.unwrap_or(true)).collect()
+    posts
+        .into_iter()
+        .filter(|p| p.meta.published.unwrap_or(true))
+        .collect()
 }
 
 async fn homepage(State(state): State<Arc<AppState>>) -> Result<Html<String>, StatusCode> {
@@ -112,7 +122,8 @@ struct PostMeta {
     title: String,
     external_url: Option<String>,
     date: NaiveDate,
-    subtitle: Option<String>,
+    iso_timestamp: Option<String>,
+    description: Option<String>,
     published: Option<bool>,
 }
 
@@ -126,7 +137,8 @@ impl From<DirEntry> for Post {
         let sections: Vec<_> = raw_content.split("---").collect();
         let frontmatter = sections[1];
         let body = sections[2..].join("");
-        let meta = serde_yaml::from_str(frontmatter).expect("Invalid Frontmatter");
+        let mut meta: PostMeta = serde_yaml::from_str(frontmatter).expect("Invalid Frontmatter");
+        meta.iso_timestamp = Some(meta.date.format("%Y-%m-%dT00:00:00Z").to_string());
 
         let content = markdown::to_html_with_options(&body, &markdown::Options::gfm()).unwrap();
 
@@ -136,4 +148,21 @@ impl From<DirEntry> for Post {
             meta,
         }
     }
+}
+
+async fn atom_feed(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Reference: https://datatracker.ietf.org/doc/html/rfc4287
+    let template = state.env.get_template("feed").unwrap();
+
+    let rendered = template
+        .render(context! {
+            title => "Ankush Menat's Blog",
+            posts => state.posts,
+            author => "Ankush Menat",
+            BASE_URL => BASE_URL,
+        })
+        .unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", "application/atom+xml".parse().unwrap());
+    (headers, rendered)
 }

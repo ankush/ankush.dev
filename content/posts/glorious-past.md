@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "On our glorious past"
-subtitle: "We were not alone!"
+description: "We were not alone!"
 date:  2021-09-14
 ---
 
