@@ -36,4 +36,8 @@ jobs:
           cd ${GITHUB_WORKSPACE}
           cargo build --verbose
           cargo run &
+          sleep 2
 
+          curl -vf http://localhost:3000 > /dev/null
+          curl -vf http://localhost:3000/p/semgrep > /dev/null
+          curl -vf http://localhost:3000/feed.xml > /dev/null
