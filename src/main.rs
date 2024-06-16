@@ -31,6 +31,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(homepage))
+        .route("/about", get(about))
         .route("/p/:slug", get(get_posts))
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
         .route("/feed.xml", get(atom_feed))
@@ -110,6 +111,10 @@ async fn redirect_old_routes(
     Redirect::permanent(&format!("/p/{slug}"))
 }
 
+async fn about() -> Redirect {
+    Redirect::temporary("/")
+}
+
 #[derive(Debug, Serialize)]
 struct Post {
     slug: String,
@@ -140,7 +145,9 @@ impl From<DirEntry> for Post {
         let mut meta: PostMeta = serde_yaml::from_str(frontmatter).expect("Invalid Frontmatter");
         meta.iso_timestamp = Some(meta.date.format("%Y-%m-%dT00:00:00Z").to_string());
 
-        let content = markdown::to_html_with_options(&body, &markdown::Options::gfm()).unwrap();
+        let mut markdown_options = markdown::Options::gfm();
+        markdown_options.compile.allow_dangerous_html = true;
+        let content = markdown::to_html_with_options(&body, &markdown_options).unwrap();
 
         Post {
             slug,
