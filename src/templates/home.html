@@ -1,14 +1,13 @@
 {% extends "layout" %}
 {% block title %} {{ title }} | {{ super() }} {% endblock %}
 {% block body %}
-<h3>Blog Posts</h3>
 
 {% for post in posts %}
 <ul>
 	<li>
 	<time datetime="{{ post.meta.date }}"> {{ post.meta.date[:7] }} </time>
 	{% if post.meta.external_url %}
-	<a href="{{ post.meta.external_url }}" >{{ post.meta.title }} (external)</a></li>
+	<a href="{{ post.meta.external_url }}" >[external] {{ post.meta.title }}</a></li>
 	{% else %}
 	<a href="/p/{{ post.slug }}" >{{ post.meta.title }}</a></li>
 	{% endif %}
