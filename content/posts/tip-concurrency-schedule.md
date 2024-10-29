@@ -6,16 +6,16 @@ date:   2024-05-29
 ---
 
 
-As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted and the databases we use carry us for the most part. Concurrency bugs are rare when you just have small or no transactions. However, business apps don't have that luxury, which are always transactional in nature and have long-running transactions.
+As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted. The databases we use carry us for the most part. Concurrency bugs remain rare when you just have small or no transactions. I mainly work on [business apps](https://erpnext.com/), which are always transactional in nature. Frequent long [running](running) transactions are not unheard of in an ERP system.
 
-Once you hit a certain number of users, every scenario you think is "rare" will start occurring. You can choose to ignore and maybe manually patch it but that won't scale in the long term. You have to patch concurrency bugs, regardless of how rare they are.
+Once you hit a certain number of users, every scenario you think is "rare" will start occurring. You can choose to ignore it and manually patch incorrect data, but that won't scale in the long term. Users of business apps do not like correctness bugs, regardless of the rarity of occurrence; it shakes their confidence in the system. So you have no choice but to fix the concurrency bugs.
 
-### Why concurrency bugs are not escapable
+### Concurrency bugs are not escapable
 
 Databases provide [ACID](https://en.wikipedia.org/wiki/ACID) properties, which are foundational in building web apps without worrying about all the hard parts. "**I**" in ACID stands for isolation. However, that isolation is usually provided at varying levels. Strong isolation levels come at the steep cost of losing parallelism and performance. So we have to use weaker isolations and rely on *some* pessimistic locking at the application layer.
 
 
-### Why debugging concurrency issues is hard
+### Debugging concurrency issues is hard
 
 Traditional debugging methods of printing values at certain step in execution or stepping through execution using debuggers are simply not efficient for debugging concurrency bugs. This is mainly because of the nature of concurrent transactions where there can be many possible interleaving of operations. Concurrency errors occur under very specific and rare conditions and to reproduce them you need to know the exact interleaving.
 
@@ -150,7 +150,7 @@ def update_record(id, values):
     cache.delete(id)                   # invalidate cache
 ```
 
-At surface, this invalidation implementation seems reasonable. But what happens when this document is frequently updated and read? Is there any possible interleaving where invalidation will be incorrect?
+At surface, this invalidation implementation seems reasonable. But what happens when this record is frequently updated and read? Is there any possible interleaving where invalidation will be incorrect?
 
 Applying some imagination, we can come up with an interleaving that will cause stale data to be stored in cache:
 
@@ -160,7 +160,7 @@ Applying some imagination, we can come up with an interleaving that will cause s
 | 2         | read(X)                          |                                     |
 | 3         | update(x)                        |                                     |
 | 4         | clear_cache(x)                   | begin                               |
-| 5         |                                  | get_cache(x) -> miss                |
+| 5         |                                  | get_cached(x) -> miss               |
 | 6         |                                  | read(x)                             |
 | 7         | commit                           | **set_cache(x)**                    |
 | 8         |                                  | commit                              |
@@ -175,10 +175,10 @@ Solution: Invalidate has to happen _AFTER_ we have committed the changes. This w
 | 1         | begin                            |                                     |
 | 2         | read(X)                          |                                     |
 | 3         | update(x)                        | begin                               |
-| 4         |                                  | get_cache(x) -> hit                 |
-| 5         |                                  | commit                                  |
-| 6         | commit                           |                                         |
-| 7         | **clear_cache(x)**               |                                         |
+| 4         |                                  | get_cached(x) -> hit                |
+| 5         |                                  | commit                              |
+| 6         | commit                           |                                     |
+| 7         | **clear_cache(x)**               |                                     |
 
 
 
