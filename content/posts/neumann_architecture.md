@@ -2,7 +2,7 @@
 layout: post
 title:  "The Soul of an Old Machine: Revisiting the Timeless von Neumann Architecture"
 description: "Revisiting the timeless Von Neumann Architecture"
-date:  2024-11-16
+date:  2024-11-11
 ---
 
 _Note: This post is based on a talk that I was supposed to give at a local FOSS United meetup but couldn't due to health issues._
@@ -272,7 +272,7 @@ Imagine mathematical genius from 20th century suggesting it's hopeless to deal w
 |             |       |          |            |                    |
 | Grand Total |       |          | 38.99      | 39.00              |
 
-If you have to round off to 2 digits, where should you round these numbers off? Rates? Line total? grGnd total?
+If you have to round off to 2 digits, where should you round these numbers off? Rates? Line total? Grand total?
 
 - If you round off the rate then rounding error will grow with quantity, so it's usually out of the picture.
 - Rounded line total and the ground total can always be off by up to 1 cent. Is it biased? For which side?
@@ -344,7 +344,7 @@ When the cycle time for writing and executing a new version of the program is hi
 
 ![von Neumann architecture diagram](/assets/images/neumann.png)
 
-This is how von Neumann's architecture is taught in schools today. The famous Big-Oh notation is also based on a similar model of computer. However, after eight decades of evolution, the underlying hardware is indistinguishable from this model.
+This is how von Neumann's architecture is taught in schools today. The famous Big-Oh notation is also based on a similar model of computer. However, after eight decades of evolution, the underlying hardware is completely different from this model.
 
 There is immense pedagogical value in our simple block diagram of von Neumann architecture, but let's be real here, even the original implementation of von Neumann architecture is not that simple. Let's take a look at this block diagram of modern Zen 4 architecture.
 
@@ -383,6 +383,6 @@ References/Further reading/Inspiration/Misc.:
 - [Computer Architecture: A Quantitative Approach.](https://dl.acm.org/doi/pdf/10.5555/1999263)
 - [Bryan Cantril on Adaptive Replacement Cache.](https://www.youtube.com/watch?v=F8sZRBdmqc0)
 
-_Shower Thought: Who will "flip" von Neumann architecture its eight decades of evolution?_
+_Shower Thought: Who will "flip" von Neumann architecture and its eight decades of evolution?_
 
-I am kind of a noob when on this topic, so if you found any typo or factual error in this post, please send a correction on GitHub ("source" in the footer) or via email.
+I am kind of a noob on this topic, so if you found any typo or factual error in this post, please send a correction on GitHub ("source" in the footer) or via email.
