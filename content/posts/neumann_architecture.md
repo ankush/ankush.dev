@@ -265,12 +265,12 @@ mathematical science, rather **hopeless to try to deal with these matters rigoro
 
 Imagine mathematical genius from 20th century suggesting it's hopeless to deal with round-off errors from successive rounding operations. This is _truly_ a hard problem to solve, just imagine a basic scenario like storing an order for multiple items.
 
-| Product     | Rate  | Quantity | Line Total | Rounded Line Total |
-| :-:         | :-:   | :-:      | :-:        | :-:                |
-| Iron        | 1.555 | 7.0      | 10.885     | 10.89              |
-| Zinc        | 2.555 | 11.0     | 28.105     | 28.11              |
-|             |       |          |            |                    |
-| Grand Total |       |          | 38.99      | 39.00              |
+| Product     | Rate  | Qty  | Line Total | Rounded Line Total |
+| :-:         | :-:   | :-:  | :-:        | :-:                |
+| Iron        | 1.555 | 7.0  | 10.885     | 10.89              |
+| Zinc        | 2.555 | 11.0 | 28.105     | 28.11              |
+|             |       |      |            |                    |
+| Grand Total |       |      | 38.99      | 39.00              |
 
 If you have to round off to 2 digits, where should you round these numbers off? Rates? Line total? Grand total?
 
