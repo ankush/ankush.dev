@@ -382,6 +382,8 @@ References/Further reading/Inspiration/Misc.:
 - [Original paper](https://www.ias.edu/sites/default/files/library/Prelim_Disc_Logical_Design.pdf)
 - [Computer Architecture: A Quantitative Approach](https://dl.acm.org/doi/pdf/10.5555/1999263)
 - [Bryan Cantrill on Adaptive Replacement Cache](https://www.youtube.com/watch?v=F8sZRBdmqc0)
+- [Halt and Catch Fire](https://www.imdb.com/title/tt2543312/)
+- [The Soul of a New Machine](https://www.goodreads.com/book/show/7090.The_Soul_of_a_New_Machine)
 
 _Shower Thought: Who will "flip" von Neumann architecture and its eight decades of evolution?_
 
