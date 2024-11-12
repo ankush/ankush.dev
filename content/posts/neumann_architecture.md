@@ -92,7 +92,7 @@ some fashion distinguish a number from an order, the memory organ can be used to
 orders.
 
 Computers before this paper had two different types of memory: "orders" and "numbers".
-As commuting has moved past just being a numerical calculations machine, we now call them "instructions" and "data".
+As computers have moved past just being numerical calculation machines, we now call them "instructions" and "data".
 
 Storing programs and data in reprogrammable memory meant that computers could now be reprogrammed without physically rewiring the computer.
 
