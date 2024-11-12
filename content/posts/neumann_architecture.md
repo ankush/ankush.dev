@@ -380,8 +380,8 @@ While computer architects ensure that you always get the expected behavior as pe
 References/Further reading/Inspiration/Misc.:
 
 - [Original paper](https://www.ias.edu/sites/default/files/library/Prelim_Disc_Logical_Design.pdf)
-- [Computer Architecture: A Quantitative Approach.](https://dl.acm.org/doi/pdf/10.5555/1999263)
-- [Bryan Cantril on Adaptive Replacement Cache.](https://www.youtube.com/watch?v=F8sZRBdmqc0)
+- [Computer Architecture: A Quantitative Approach](https://dl.acm.org/doi/pdf/10.5555/1999263)
+- [Bryan Cantrill on Adaptive Replacement Cache](https://www.youtube.com/watch?v=F8sZRBdmqc0)
 
 _Shower Thought: Who will "flip" von Neumann architecture and its eight decades of evolution?_
 
