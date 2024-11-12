@@ -6,6 +6,11 @@ date:   2020-11-09
 ---
 
 
+Update: I don't use this anymore. I went back to a notebook and pen.
+
+<hr>
+
+
 I have been working on a system for notetaking and basic task management. At this point I feel I have perfected the notetaking part but need to work more on the task management aspect of the system. So I though I should document my thoughts.
 
 ### Requirements for designing my current system.

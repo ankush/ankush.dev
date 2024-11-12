@@ -127,4 +127,4 @@ day,eventtype,white_player,black_player,white_elo,black_elo,result,termination,o
 
 Unix shell tools build for text processing have been around for a really long time and they've stood the test of time. So if you're processing structured textual data, you should definitely consider them before starting a dIsTriButeD coMpUte CluSter.
 
-If you want to learn more about this kinda "data wrangling" with shell tools I highly recommend a lecture from MIT's course "Missing Semester": [Data Wrangling](https://missing.csail.mit.edu/2020/data-wrangling/)
+If you want to learn more about this kinda "data wrangling" with shell tools I highly recommend a lecture from MIT's course "Missing Semester": [Data Wrangling](https://missing.csail.mit.edu/2020/data-wrangling/).
