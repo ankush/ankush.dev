@@ -6,7 +6,7 @@ date:   2024-05-29
 ---
 
 
-As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted. The databases we use carry us for the most part. Concurrency bugs remain rare when you just have small or no transactions. I mainly work on [business apps](https://erpnext.com/), which are always transactional in nature. Frequent long [running](running) transactions are not unheard of in an ERP system.
+As web developers, we usually don't have to deal with concurrency bugs much. Everything we need is neatly abstracted. The databases we use carry us for the most part. Concurrency bugs remain rare when you just have small or no transactions. I mainly work on [business apps](https://erpnext.com/), which are always transactional in nature. Frequent long running transactions are not unheard of in an ERP system.
 
 Once you hit a certain number of users, every scenario you think is "rare" will start occurring. You can choose to ignore it and manually patch incorrect data, but that won't scale in the long term. Users of business apps do not like correctness bugs, regardless of the rarity of occurrence; it shakes their confidence in the system. So you have no choice but to fix the concurrency bugs.
 

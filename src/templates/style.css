@@ -1,0 +1,77 @@
+/* {#
+// Adapted from https://github.com/gkroon/dracula-css
+// Reused under MIT License
+#} */
+
+:root {
+  --bg-color: #282A36;
+  --current-line: #44475A;
+  --fg-color: #F8F8F2;
+  --d-comment: #6272A4;
+  --d-cyan: #8BE9FD;
+  --d-green: #50FA7B;
+  --d-orange: #FFB86C;
+  --d-pink: #FF79C6;
+  --d-purple: #BD93F9;
+  --d-red: #FF5555;
+  --d-yellow: #F1FA8C;
+  --d-mild-green: #79D28F; /* this is green saturated to 50% */
+
+}
+
+html, body {
+	background-color: var(--bg-color);
+}
+
+body * {
+	color: var(--fg-color);
+	background-color: var(--bg-color);
+}
+
+a, a * {
+	color: var(--d-green);
+	background-color: transparent;
+	text-decoration: none;
+}
+
+a:hover,
+a:hover *,
+a:visited:hover,
+a:visited:hover *,
+.link:hover,
+.link:hover * {
+	color: var(--d-yellow);
+}
+
+a:visited,
+a:visited * {
+	color: var(--d-mild-green);
+}
+
+h1, h2, h3, h4, h5, h6 {
+	color: var(--d-pink);
+}
+
+a.highlight,
+a.highlight *,
+a.active,
+a.active *,
+.selected,
+.selected *,
+[href="#"] {
+	font-weight: bold;
+	color: var(--d-cyan);
+}
+
+
+body { max-width: 760px; margin: 48px auto; padding: 0 10px; font-family: 'Ubuntu', 'Arial', sans-serif; }
+main > ul { list-style-type: none; padding: 0; }
+main > ul > li { display: flex; }
+main > ul > li > time { min-width: 4em; }
+nav { text-align: center; }
+blockquote { border-left: 2px solid; padding: 0 10px; }
+blockquote p { font-style: italic; }
+img { margin-left: auto; margin-right: auto; display: block; max-width:100%; max-height:100%; }
+table, th, td { border: 1px solid; }
+table { border-collapse: collapse; padding: 0.1em; margin: 0px auto; }
+th, td { padding: 0.1em 0.5em; }

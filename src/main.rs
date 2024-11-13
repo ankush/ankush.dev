@@ -58,6 +58,8 @@ fn get_jenv() -> Environment<'static> {
         .unwrap();
     env.add_template("hljs", include_str!("./templates/hljs.html"))
         .unwrap();
+    env.add_template("style", include_str!("./templates/style.css"))
+        .unwrap();
     env
 }
 
