@@ -8,12 +8,15 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::fs::{self, DirEntry};
 use std::sync::Arc;
+use axum_response_cache::CacheLayer;
 
 #[cfg(debug_assertions)]
 const BASE_URL: &str = "http://localhost:3000";
 
 #[cfg(not(debug_assertions))]
 const BASE_URL: &str = "https://ankush.dev";
+
+const RESPONSE_CACHE_TTL: u64 = 6 * 60 * 60; // =6 hour hours, any change requires a server restart anyway.
 
 struct AppState {
     env: Environment<'static>,
@@ -30,11 +33,11 @@ async fn main() {
     let app_state = Arc::new(AppState { env, posts });
 
     let app = Router::new()
-        .route("/", get(homepage))
+        .route("/", get(homepage).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .route("/about", get(about))
-        .route("/p/:slug", get(get_posts))
+        .route("/p/:slug", get(get_posts).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
-        .route("/feed.xml", get(atom_feed))
+        .route("/feed.xml", get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .fallback(not_found)
         .with_state(app_state);
 

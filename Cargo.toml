@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 axum = "0.7"
+axum-response-cache = "0.1.1"
 chrono = { version = "0.4.38", features = ["serde"] }
 markdown = "1.0.0-alpha.17"
 minijinja = "2.0"
