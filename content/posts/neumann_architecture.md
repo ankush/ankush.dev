@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "The Soul of an Old Machine: Revisiting the Timeless von Neumann Architecture"
-description: "Revisiting the timeless Von Neumann Architecture"
+description: "Revisiting the timeless von Neumann Architecture"
 date:  2024-11-11
 ---
 
@@ -239,9 +239,9 @@ could otherwise be used for carrying more digits per word. It would therefore se
 whether the modest advantages of a floating binary point offset the loss of memory capacity and the
 increased complexity of the arithmetic and control circuits.
 
-Von Neumann wasn't entirely sold on why we might need floating-point numbers. He was quite vocal in his critique of floating-point numbers. For better or worse, floating point is now a ubiquitous number type in most systems.
+von Neumann wasn't entirely sold on why we might need floating-point numbers. He was quite vocal in his critique of floating-point numbers. For better or worse, floating point is now a ubiquitous number type in most systems.
 
-In another paper, we find Von Neumann's even shaper critique of floating-point:
+In another paper, we find von Neumann's even sharper critique of floating-point:
 
 > "Besides, the floating binary point represents an effort to render a thorough
 mathematical understanding of at least part of the problem unnecessary, and
@@ -382,6 +382,7 @@ References/Further reading/Inspiration/Misc.:
 - [Original paper](https://www.ias.edu/sites/default/files/library/Prelim_Disc_Logical_Design.pdf)
 - [Computer Architecture: A Quantitative Approach](https://dl.acm.org/doi/pdf/10.5555/1999263)
 - [Bryan Cantrill on Adaptive Replacement Cache](https://www.youtube.com/watch?v=F8sZRBdmqc0)
+- [The Future of Computing: Logic or Biology](https://lamport.azurewebsites.net/pubs/future-of-computing.pdf)
 - [Halt and Catch Fire](https://www.imdb.com/title/tt2543312/)
 - [The Soul of a New Machine](https://www.goodreads.com/book/show/7090.The_Soul_of_a_New_Machine)
 
