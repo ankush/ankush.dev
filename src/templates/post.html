@@ -15,9 +15,8 @@
 {{ post.content }}
 </article>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script>hljs.highlightAll();</script>
+{# load optional stuff in the end #}
+{% include 'hljs' %}
 
 {% endblock %}
 

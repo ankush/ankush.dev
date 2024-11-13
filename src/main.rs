@@ -56,6 +56,8 @@ fn get_jenv() -> Environment<'static> {
         .unwrap();
     env.add_template("feed", include_str!("./templates/feed.xml"))
         .unwrap();
+    env.add_template("hljs", include_str!("./templates/hljs.html"))
+        .unwrap();
     env
 }
 
