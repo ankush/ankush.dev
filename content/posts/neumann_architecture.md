@@ -11,7 +11,7 @@ _Note: This post is based on a talk that I was supposed to give at a local FOSS 
 
 > "... This puts the future squarely in the hands of those who know computers not for what they are, but for everything they have the potential to be."
 >
-> "Computers aren't the thing, they are the thing that gets us to the thing"
+> "Computers aren't the thing, they are the thing that gets us to the thing."
 >
 > -- Halt and Catch Fire, S01E01, 2014.
 
@@ -370,7 +370,7 @@ In modern CPUs, *NOTHING* is straightforward.
 
 While computer architects ensure that you always get the expected behavior as per specifications, they can't do the same to guarantee performance. One needs to understand all the underlying components to a reasonable degree to truly utilize the capabilities of modern hardware, otherwise, we're doomed to use compute clusters for [problems that can be solved using a single laptop](https://www.usenix.org/system/files/conference/hotos15/hotos15-paper-mcsherry.pdf). In the words of Paul Barham:
 
-> "You can have a second computer once you've shown you know how to use the first one."
+> You can have a second computer once you've shown you know how to use the first one.
 
 
 \- - -
