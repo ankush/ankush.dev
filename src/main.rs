@@ -9,6 +9,8 @@ use std::cmp::Reverse;
 use std::fs::{self, DirEntry};
 use std::sync::Arc;
 use axum_response_cache::CacheLayer;
+#[allow(unused_imports)] // This is only used in debug build
+use tower_http::services::ServeDir;
 
 #[cfg(debug_assertions)]
 const BASE_URL: &str = "http://localhost:3000";
@@ -40,6 +42,9 @@ async fn main() {
         .route("/feed.xml", get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .fallback(not_found)
         .with_state(app_state);
+
+    #[cfg(debug_assertions)]
+    let app = app.nest_service("/assets", ServeDir::new("./content/assets"));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());

@@ -14,3 +14,5 @@ minijinja = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9.34"
 tokio = { version = "1.37", features = ["full"] }
+tower = "0.5.1"
+tower-http = { version = "0.6.1", features = ["fs"] }
