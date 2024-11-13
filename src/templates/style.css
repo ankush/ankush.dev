@@ -16,15 +16,15 @@
   --d-red: #FF5555;
   --d-yellow: #F1FA8C;
   --d-mild-green: #79D28F; /* this is green saturated to 50% */
-
 }
 
-html, body { color: var(--fg-color); background-color: var(--bg-color); }
+* { box-sizing: border-box; }
+html, body { color: var(--fg-color); background-color: var(--bg-color); line-height: 1.4; }
 a { color: var(--d-green); background-color: transparent; text-decoration: none; }
-a:hover, a:visited:hover { color: var(--d-yellow); }
+a:hover, a:visited:hover { color: var(--d-yellow); text-decoration: underline; }
 a:visited { color: var(--d-mild-green); }
 h1, h2, h3, h4, h5, h6 { color: var(--d-pink); }
-body { max-width: 760px; margin: 48px auto; padding: 0 10px; font-family: 'Ubuntu', 'Arial', sans-serif; }
+body { max-width: 760px; margin: 1.5em auto; padding: 0 10px; font-family: 'Ubuntu', 'Arial', sans-serif; }
 main > ul { list-style-type: none; padding: 0; }
 main > ul > li { display: flex; }
 main > ul > li > time { min-width: 4em; color: var(--d-yellow)}
