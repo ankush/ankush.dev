@@ -20,31 +20,23 @@
 }
 
 html, body {
-	background-color: var(--bg-color);
-}
-
-body * {
 	color: var(--fg-color);
 	background-color: var(--bg-color);
 }
 
-a, a * {
+a {
 	color: var(--d-green);
 	background-color: transparent;
 	text-decoration: none;
 }
 
 a:hover,
-a:hover *,
 a:visited:hover,
-a:visited:hover *,
-.link:hover,
-.link:hover * {
+{
 	color: var(--d-yellow);
 }
 
-a:visited,
-a:visited * {
+a:visited {
 	color: var(--d-mild-green);
 }
 
@@ -52,22 +44,10 @@ h1, h2, h3, h4, h5, h6 {
 	color: var(--d-pink);
 }
 
-a.highlight,
-a.highlight *,
-a.active,
-a.active *,
-.selected,
-.selected *,
-[href="#"] {
-	font-weight: bold;
-	color: var(--d-cyan);
-}
-
-
 body { max-width: 760px; margin: 48px auto; padding: 0 10px; font-family: 'Ubuntu', 'Arial', sans-serif; }
 main > ul { list-style-type: none; padding: 0; }
 main > ul > li { display: flex; }
-main > ul > li > time { min-width: 4em; }
+main > ul > li > time { min-width: 4em; color: var(--d-yellow)}
 nav { text-align: center; }
 blockquote { border-left: 2px solid; padding: 0 10px; }
 blockquote p { font-style: italic; }

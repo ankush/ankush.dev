@@ -6,20 +6,17 @@
     <title>{% block title %}Ankush Menat{% endblock %}</title>
     {% block meta %}{% endblock %}
     <style>
-    {% include "style" %} {# Dracula color scheme #}
+    {% include "style" %}
     </style>
   </head>
 
   <body>
-    <nav>
-      <a href="/"><h3>Ankush Menat</h3></a>
-    </nav>
-    <hr>
   <main>
     {% block body %}{% endblock %}
-    <hr>
+    <br>
   <footer>
     <nav>
+      <a href="/">Home</a> ·
       <a target="_blank" href="https://github.com/ankush">GitHub</a> ·
       <a href="mailto:me@ankush.dev">Email</a> ·
       <a target="_blank" href="/assets/resume.pdf">Resume</a> ·

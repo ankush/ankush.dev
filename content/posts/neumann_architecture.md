@@ -373,9 +373,8 @@ While computer architects ensure that you always get the expected behavior as pe
 > "You can have a second computer once you've shown you know how to use the first one."
 
 
-<br>
-<br>
-<hr>
+\- - -
+
 
 References/Further reading/Inspiration/Misc.:
 
