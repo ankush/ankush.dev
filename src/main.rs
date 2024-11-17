@@ -103,6 +103,7 @@ async fn get_posts(
             let rendered = template
                 .render(context! {
                     post => post,
+                    formatted_date => format!("{}", post.meta.date.format("%B %d, %Y")),
                 })
                 .unwrap();
 

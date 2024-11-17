@@ -9,7 +9,7 @@
 
 {% block body %}
 <header><h2>{{ post.meta.title }}</h2></header>
-<p>Written on {{ post.meta.date }}</p>
+<time datetime={{ post.meta.date }} >{{ formatted_date }}</time>
 
 <article>
 {{ post.content }}
