@@ -1,6 +1,7 @@
 name: ankush_dev
 services:
   backend:
+    image: ghcr.io/ankush/personal_blog:latest
     build:
       context: .
       dockerfile: ./Dockerfile
