@@ -6,13 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["http1", "tokio"], default-features = false }
 axum-response-cache = "0.1.1"
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { version = "0.4.38", features = ["alloc", "serde"], default-features = false }
 markdown = "1.0.0-alpha.17"
 minijinja = "2.0"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["serde_derive"], default-features = false }
 serde_yaml = "0.9.34"
-tokio = { version = "1.37", features = ["full"] }
-tower = "0.5.1"
+tokio = { version = "1.37", features = ["rt-multi-thread"] }
 tower-http = { version = "0.6.1", features = ["fs"] }
