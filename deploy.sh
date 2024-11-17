@@ -10,4 +10,4 @@ docker compose pull
 docker compose stop
 docker compose rm -f backend
 docker compose up -d
-docker system prune
+docker system prune -f
