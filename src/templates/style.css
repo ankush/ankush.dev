@@ -26,8 +26,8 @@ a:visited { color: var(--d-mild-green); }
 h1, h2, h3, h4, h5, h6 { color: var(--d-pink); }
 body { max-width: 760px; margin: 1.5em auto; padding: 0 10px; font-family: 'Ubuntu', 'Arial', sans-serif; }
 main > ul { list-style-type: none; padding: 0; }
-main > ul > li { display: flex; }
-main > ul > li > time { min-width: 4em; color: var(--d-yellow)}
+main > ul > li { display: grid; grid-template-columns: fit-content(10em) 1fr; }
+main > ul > li > time { color: var(--d-yellow); padding-right: 1em; min-width: 7em;}
 nav { text-align: center; }
 blockquote { border-left: 2px solid; padding: 0 0.5em; margin: 1em }
 blockquote p { font-style: italic; }

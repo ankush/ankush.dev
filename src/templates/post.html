@@ -9,7 +9,7 @@
 
 {% block body %}
 <header><h2>{{ post.meta.title }}</h2></header>
-<time datetime={{ post.meta.date }} >{{ formatted_date }}</time>
+<time datetime={{ post.meta.date }} >{{ format_date(post.meta.date, false) }}</time>
 
 <article>
 {{ post.content }}

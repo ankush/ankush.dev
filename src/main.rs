@@ -59,7 +59,19 @@ fn get_jenv() -> Environment<'static> {
     env.add_template("feed", include_str!("./templates/feed.xml")).unwrap();
     env.add_template("hljs", include_str!("./templates/hljs.html")).unwrap();
     env.add_template("style", include_str!("./templates/style.css")).unwrap();
+    env.add_function("format_date", format_date);
+
     env
+}
+
+
+fn format_date(date_str: String, short: bool) -> String {
+    let Ok(date) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") else { return date_str };
+    if short {
+        return format!("{}", date.format("%b %d, %Y"))
+    } else {
+        return format!("{}", date.format("%B %d, %Y"))
+    }
 }
 
 fn read_posts() -> Vec<Post> {
@@ -97,7 +109,6 @@ async fn get_posts(
             let rendered = template
                 .render(context! {
                     post => post,
-                    formatted_date => format!("{}", post.meta.date.format("%B %d, %Y")),
                 })
                 .unwrap();
 
