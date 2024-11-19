@@ -1,13 +1,17 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, State, Json};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect};
-use axum::{response::Html, routing::get, Router};
+use axum::{response::Html, routing::{get, post}, Router};
 use chrono::NaiveDate;
 use minijinja::{context, Environment};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
+use std::collections::HashMap;
 use std::fs::{self, DirEntry};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time;
 use axum_response_cache::CacheLayer;
 #[allow(unused_imports)] // This is only used in debug build
 use tower_http::services::ServeDir;
@@ -23,25 +27,41 @@ const RESPONSE_CACHE_TTL: u64 = 6 * 60 * 60; // =6 hour hours, any change requir
 struct AppState {
     env: Environment<'static>,
     posts: Vec<Post>,
+    page_hits: Mutex<HashMap<String, i64>>,
+    db: Mutex<Connection>,
 }
 
 const POSTS_DIR: &str = "./content/posts/";
+const DB_LOCATION: &str = "./content/data/blog.db";
 
 #[tokio::main]
 async fn main() {
     let env = get_jenv();
     let posts = read_posts();
 
-    let app_state = Arc::new(AppState { env, posts });
+    let app_state = Arc::new(AppState {
+        env,
+        posts,
+        page_hits: Default::default(),
+        db: Mutex::new(get_db())
+    });
 
+    restore_views(app_state.clone());
+    {
+        let app_state = app_state.clone();
+        thread::spawn(|| {
+            persistence_thread(app_state);
+        });
+    }
     let app = Router::new()
         .route("/", get(homepage).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .route("/about", get(about))
         .route("/p/:slug", get(get_posts).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
         .route("/feed.xml", get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
+        .route("/pageview", post(store_pageview))
         .fallback(not_found)
-        .with_state(app_state);
+        .with_state(app_state.clone());
 
     #[cfg(debug_assertions)]
     let app = app.nest_service("/assets", ServeDir::new("./content/assets"));
@@ -59,10 +79,12 @@ fn get_jenv() -> Environment<'static> {
     env.add_template("feed", include_str!("./templates/feed.xml")).unwrap();
     env.add_template("hljs", include_str!("./templates/hljs.html")).unwrap();
     env.add_template("style", include_str!("./templates/style.css")).unwrap();
+    env.add_template("pageview", include_str!("./templates/pageview.js")).unwrap();
     env.add_function("format_date", format_date);
 
     env
 }
+
 
 
 fn format_date(date_str: String, short: bool) -> String {
@@ -190,4 +212,73 @@ async fn atom_feed(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/atom+xml".parse().unwrap());
     (headers, rendered)
+}
+
+
+#[derive(Deserialize)]
+struct Pageview {
+    path: String,
+}
+
+async fn store_pageview(State(state): State<Arc<AppState>>, Json(view): Json<Pageview>) {
+    tokio::task::spawn_blocking(move || {
+        let slug = view.path.strip_prefix("/p/").unwrap_or("");
+        if !state.posts.iter().any(|p| p.slug == slug) {
+            return;
+        }
+        let mut page_hits = state.page_hits.lock().unwrap();
+        *page_hits.entry(slug.to_string()).or_default() += 1;
+    });
+    return ();
+}
+
+
+fn persistence_thread(state: Arc<AppState>) {
+    loop {
+        thread::sleep(time::Duration::from_secs(60));
+        persist_views(state.clone());
+    }
+}
+
+
+fn persist_views(state: Arc<AppState>) {
+    let page_hits = state.page_hits.lock().unwrap();
+    let db = state.db.lock().unwrap();
+
+    page_hits.iter().for_each(|(k, v)| {
+        let _ = db.execute("
+            INSERT INTO page_hits (post, hits) values (?1, ?2)
+                ON CONFLICT(post) DO UPDATE SET hits= ?3
+            ", (k, v, v));
+    })
+
+}
+
+fn restore_views(state: Arc<AppState>) {
+    let mut page_hits = state.page_hits.lock().unwrap();
+    let db = state.db.lock().unwrap();
+
+    struct StatRow(String, i64);
+
+    let mut query = db.prepare("select post, hits from page_hits").unwrap();
+
+    let stat_iter = query.query_map([], |row| {
+        Ok(StatRow(row.get(0)?, row.get(1)?))
+    }).unwrap();
+
+    for stat in stat_iter {
+        let stat = stat.unwrap();
+        page_hits.insert(stat.0, stat.1);
+    }
+}
+
+fn get_db() -> Connection {
+    let db = Connection::open(DB_LOCATION).unwrap();
+    db.execute("
+        CREATE TABLE IF NOT EXISTS page_hits (
+            post TEXT PRIMARY KEY,
+            hits INTEGER
+        )", ()).unwrap();
+
+    db
 }
