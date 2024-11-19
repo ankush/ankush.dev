@@ -53,18 +53,12 @@ async fn main() {
 
 fn get_jenv() -> Environment<'static> {
     let mut env = Environment::new();
-    env.add_template("layout", include_str!("./templates/layout.html"))
-        .unwrap();
-    env.add_template("home", include_str!("./templates/home.html"))
-        .unwrap();
-    env.add_template("post", include_str!("./templates/post.html"))
-        .unwrap();
-    env.add_template("feed", include_str!("./templates/feed.xml"))
-        .unwrap();
-    env.add_template("hljs", include_str!("./templates/hljs.html"))
-        .unwrap();
-    env.add_template("style", include_str!("./templates/style.css"))
-        .unwrap();
+    env.add_template("layout", include_str!("./templates/layout.html")).unwrap();
+    env.add_template("home", include_str!("./templates/home.html")).unwrap();
+    env.add_template("post", include_str!("./templates/post.html")).unwrap();
+    env.add_template("feed", include_str!("./templates/feed.xml")).unwrap();
+    env.add_template("hljs", include_str!("./templates/hljs.html")).unwrap();
+    env.add_template("style", include_str!("./templates/style.css")).unwrap();
     env
 }
 
@@ -177,7 +171,7 @@ async fn atom_feed(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let rendered = template
         .render(context! {
             title => "Ankush Menat's Blog",
-            posts => state.posts,
+            posts => state.posts.iter().filter(|p| p.meta.external_url.is_none()).collect::<Vec<_>>(),
             author => "Ankush Menat",
             BASE_URL => BASE_URL,
         })
