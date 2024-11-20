@@ -19,7 +19,7 @@
   <li>
     <time datetime="{{ post.meta.date }}"> {{ format_date(post.meta.date, true) }} </time>
     {%- if post.meta.external_url %}
-    <a href="{{ post.meta.external_url }}" >[external] {{ post.meta.title }}</a>
+    <a target="_blank" href="{{ post.meta.external_url }}" >{{ post.meta.title }} <span style="transform: rotate(90deg); display: inline-block">⎋</span></a>
     {% else %}
     <a href="/p/{{ post.slug }}" >{{ post.meta.title }}</a>
     {%- endif %}
