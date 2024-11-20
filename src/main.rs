@@ -60,6 +60,7 @@ async fn main() {
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
         .route("/feed.xml", get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
         .route("/pageview", post(store_pageview))
+        .route("/favicon.ico", get(favicon))
         .fallback(not_found)
         .with_state(app_state.clone());
 
@@ -157,6 +158,10 @@ async fn redirect_old_routes(
 
 async fn about() -> Redirect {
     Redirect::temporary("/")
+}
+
+async fn favicon() -> Redirect {
+    Redirect::permanent("/assets/favicon.ico")
 }
 
 #[derive(Debug, Serialize)]
