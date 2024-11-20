@@ -81,6 +81,8 @@ fn get_jenv() -> Environment<'static> {
     env.add_template("style", include_str!("./templates/style.css")).unwrap();
     env.add_template("pageview", include_str!("./templates/pageview.js")).unwrap();
     env.add_function("format_date", format_date);
+    env.set_trim_blocks(true);
+    env.set_lstrip_blocks(true);
 
     env
 }
@@ -113,6 +115,7 @@ async fn homepage(State(state): State<Arc<AppState>>) -> Result<Html<String>, St
         .render(context! {
             title => "Blog",
             posts => state.posts,
+            BASE_URL => BASE_URL,
         })
         .unwrap();
 
@@ -131,6 +134,7 @@ async fn get_posts(
             let rendered = template
                 .render(context! {
                     post => post,
+                    BASE_URL => BASE_URL,
                 })
                 .unwrap();
 

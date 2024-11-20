@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "The Soul of an Old Machine: Revisiting the Timeless von Neumann Architecture"
+title:  "The Soul of an Old Machine: Revisiting the von Neumann Architecture"
 description: "Revisiting the timeless von Neumann Architecture"
 date:  2024-11-11
 ---

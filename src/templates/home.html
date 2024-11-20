@@ -2,6 +2,13 @@
 {% block title %} {{ title }} | {{ super() }} {% endblock %}
 {% block body %}
 
+{% block meta %}
+  <meta name="description" content="Ankush Menat's Blog">
+  <meta property="og:title" content="Ankush Menat">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ BASE_URL }}">
+  <meta rel="canonical" href="{{ BASE_URL }}">
+{% endblock %}
 
 <nav>
   <a href="/"><h3>Ankush Menat</h3></a>
@@ -9,13 +16,14 @@
 
 {% for post in posts %}
 <ul>
-	<li>
-	<time datetime="{{ post.meta.date }}"> {{ format_date(post.meta.date, true) }} </time>
-	{% if post.meta.external_url %}
-	<a href="{{ post.meta.external_url }}" >[external] {{ post.meta.title }}</a></li>
-	{% else %}
-	<a href="/p/{{ post.slug }}" >{{ post.meta.title }}</a></li>
-	{% endif %}
+  <li>
+    <time datetime="{{ post.meta.date }}"> {{ format_date(post.meta.date, true) }} </time>
+    {%- if post.meta.external_url %}
+    <a href="{{ post.meta.external_url }}" >[external] {{ post.meta.title }}</a>
+    {% else %}
+    <a href="/p/{{ post.slug }}" >{{ post.meta.title }}</a>
+    {%- endif %}
+  </li>
 </ul>
 {% endfor %}
 
