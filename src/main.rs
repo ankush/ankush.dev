@@ -78,7 +78,6 @@ fn get_jenv() -> Environment<'static> {
     env.add_template("home", include_str!("./templates/home.html")).unwrap();
     env.add_template("post", include_str!("./templates/post.html")).unwrap();
     env.add_template("feed", include_str!("./templates/feed.xml")).unwrap();
-    env.add_template("hljs", include_str!("./templates/hljs.html")).unwrap();
     env.add_template("style", include_str!("./templates/style.css")).unwrap();
     env.add_template("pageview", include_str!("./templates/pageview.js")).unwrap();
     env.add_function("format_date", format_date);

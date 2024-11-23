@@ -35,4 +35,5 @@ img { margin-left: auto; margin-right: auto; display: block; max-width:100%; max
 table, th, td { border: 1px solid; }
 table { border-collapse: collapse; padding: 0.1em; margin: 0px auto; }
 th, td { padding: 0.1em 0.5em; }
-code:not(pre code) { font-family: 'Ubuntu Mono', 'Consolas', 'Monaco', monospace; background: var(--current-line); padding: 2px; }
+code { font-family: 'Ubuntu Mono', 'Consolas', 'Monaco', monospace; background: var(--current-line); padding: 0.1em; }
+pre code {display: block; overflow-x: auto; padding: 0.3em; }
