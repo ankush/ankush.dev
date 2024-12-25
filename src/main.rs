@@ -15,6 +15,8 @@ use std::time;
 use axum_response_cache::CacheLayer;
 #[allow(unused_imports)] // This is only used in debug build
 use tower_http::services::ServeDir;
+#[allow(unused_imports)] // This is only used in debug build
+use tower_livereload::LiveReloadLayer;
 
 #[cfg(debug_assertions)]
 const BASE_URL: &str = "http://localhost:3000";
@@ -66,6 +68,9 @@ async fn main() {
 
     #[cfg(debug_assertions)]
     let app = app.nest_service("/assets", ServeDir::new("./content/assets"));
+
+    #[cfg(debug_assertions)]
+    let app = app.layer(LiveReloadLayer::new());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
