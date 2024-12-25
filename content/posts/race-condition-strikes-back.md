@@ -4,6 +4,7 @@ title:  'Fake Debugging II: The Race Condition Strikes Back'
 description: "Fake Debugging Considered Harmful."
 date: 2024-12-25
 discussions:
+    HackerNews: "https://news.ycombinator.com/item?id=42509088"
     LinkedIn: "https://www.linkedin.com/posts/ankushmenat_fake-debugging-ii-the-race-condition-strikes-activity-7277678826703179776-URvk"
     Lobsters: "https://lobste.rs/s/rpl1vc/how_i_debugged_2_year_old_fake_debugged"
 ---
@@ -101,14 +102,11 @@ My memory is a bit hazy but if I recall correctly we didn't investigate it furth
 
 ### Revisiting the same bug, two years later
 
-A few days ago I again started working on getting our codebase ready for multi-threaded deployment. Multi-threaded deployments are more memory efficient for us, by a factor of ~2x-4x. So the toil of dealing with these problems is worth it.
+We use the old-school synchronous request-response model. Everything specific to the request lives in the execution stack of the request handler function OR in convenient global [context-aware variables](https://werkzeug.palletsprojects.com/en/stable/local/) like `frappe.db` which uses `LocalProxy` to magically return request specific version database connection. It's like "thread locals" but instead "local" to a particular request. So it should not be very hard to safely use multi-threaded workers.
+
+A few days ago I again started working on getting our codebase ready for multi-threaded deployments. Multi-threaded deployments are more memory efficient for us, by a factor of ~2x-4x. So the toil of dealing with these problems is worth it.
 
 A colleague of mine asked if it's safe to deploy multi-threading configurations to old versions and eventually, that conversation went to _"what were the thread-safety fixes"_ we pushed after our last failed attempt.
-
-#### Some additional context
-
-We don't have many problems with multi-threading bugs because our web workers use the old-school synchronous request-response model. Everything specific to the request lives in the execution stack of the request handler function OR in convenient global [context-aware variables](https://werkzeug.palletsprojects.com/en/stable/local/) like `frappe.db` which uses `LocalProxy` to magically return request specific version database connection. It's like "thread locals" but instead "local" to a particular request.
-
 
 I again saw this bug in the list and remembered how I never quite reproduced it or _knew_ if it was fixed.
 
