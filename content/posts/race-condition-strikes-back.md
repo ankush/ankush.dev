@@ -4,6 +4,8 @@ title:  'Fake Debugging II: The Race Condition Strikes Back'
 description: "Fake Debugging Considered Harmful."
 date: 2024-12-25
 discussions:
+    LinkedIn: "https://www.linkedin.com/posts/ankushmenat_fake-debugging-ii-the-race-condition-strikes-activity-7277678826703179776-URvk"
+    Lobsters: "https://lobste.rs/s/rpl1vc/how_i_debugged_2_year_old_fake_debugged"
 ---
 
 
