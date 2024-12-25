@@ -2,9 +2,9 @@
 {% block title %} {{ post.meta.title }} | {{ super() }} {% endblock %}
 
 {% block meta %}
-	<meta name="description" content="{{ post.meta.description }}">
-	<meta property="og:description" content="{{ post.meta.description }}">
-	<meta property="og:title" content="{{ post.meta.title }}">
+	<meta name="description" content="{{ post.meta.description|escape }}">
+	<meta property="og:description" content="{{ post.meta.description|escape }}">
+	<meta property="og:title" content="{{ post.meta.title|escape }}">
 	<meta property="og:type" content="article">
 	<meta property="og:url" content="{{ BASE_URL }}/p/{{ post.slug }}">
 	<meta rel="canonical" href="{{ BASE_URL }}/p/{{ post.slug }}">
