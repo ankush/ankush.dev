@@ -3,6 +3,10 @@ layout: post
 title:  "Reliably Benchmarking Small Changes"
 description: "Modern OSs and hardware make the task of benchmarking small performance gains difficult"
 date:   2024-11-20
+lobsters: "https://lobste.rs/s/5opvwa/reliably_benchmarking_small_changes"
+discussions:
+  HackerNews: "https://news.ycombinator.com/item?id=42213264"
+  Reddit: "https://www.reddit.com/r/programming/comments/1gxd4tc/reliably_benchmarking_small_changes/"
 ---
 
 I often have to benchmark web services to see if some small change has a meaningful impact on performance. Typically, you spawn a few web service workers and use another program (ideally on another machine in the same network) to hammer that service. During this time, the test program will keep track of how many requests were processed and the latency for each of them. If throughput goes up and/or latency goes down, your change was effective. All of this seems straightforward, so what's the catch?

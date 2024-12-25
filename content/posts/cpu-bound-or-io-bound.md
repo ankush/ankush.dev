@@ -3,6 +3,9 @@ layout: post
 title:  "Is Your Web Service Really I/O Bound?"
 description: "Not knowing the true nature of your program can result in months of futile engineering work."
 date:   2024-11-22
+discussions:
+    HackerNews: "https://news.ycombinator.com/item?id=42215384"
+    LinkedIn: "https://www.linkedin.com/posts/ankushmenat_is-your-web-service-really-io-bound-activity-7265751393125216257-51ey"
 ---
 
 

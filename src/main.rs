@@ -183,6 +183,7 @@ struct PostMeta {
     iso_timestamp: Option<String>,
     description: Option<String>,
     published: Option<bool>,
+    discussions: Option<HashMap<String, String>>,
 }
 
 impl From<DirEntry> for Post {

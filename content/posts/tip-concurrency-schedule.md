@@ -3,6 +3,9 @@ layout: post
 title:  "Solving Concurrency Bugs Using Schedules and Imagination"
 description: "Race conditions are hard, debugging them without right approach is even harder."
 date:   2024-05-29
+discussions:
+    HackerNews: "https://news.ycombinator.com/item?id=40896383"
+    LinkedIn: "https://www.linkedin.com/posts/ankushmenat_solving-concurrency-bugs-using-schedules-activity-7201835361277251585-psOE"
 ---
 
 

@@ -3,6 +3,10 @@ layout: post
 title:  "The Soul of an Old Machine: Revisiting the von Neumann Architecture"
 description: "Revisiting the timeless von Neumann Architecture"
 date:  2024-11-11
+discussions:
+  HackerNews: "https://news.ycombinator.com/item?id=42112817"
+  Lobsters: "https://lobste.rs/s/6e25t7/soul_old_machine_revisiting_timeless_von"
+  LinkedIn: "https://www.linkedin.com/posts/ankushmenat_the-soul-of-an-old-machine-revisiting-the-activity-7261792375901970433-FLqB"
 ---
 
 _Note: This post is based on a talk that I was supposed to give at a local FOSS United meetup but couldn't due to health issues._
