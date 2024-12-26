@@ -102,7 +102,7 @@ My memory is a bit hazy but if I recall correctly we didn't investigate it furth
 
 ### Revisiting the same bug, two years later
 
-We use the old-school synchronous request-response model. Everything specific to the request lives in the execution stack of the request handler function OR in convenient global [context-aware variables](https://werkzeug.palletsprojects.com/en/stable/local/) like `frappe.db` which uses `LocalProxy` to magically return request specific version database connection. It's like "thread locals" but instead "local" to a particular request. So it should not be very hard to safely use multi-threaded workers.
+We use the old-school synchronous request-response model. Everything specific to the request lives in the execution stack of the request handler function OR in convenient global [context-aware variables](https://werkzeug.palletsprojects.com/en/stable/local/) like `frappe.db` which uses `LocalProxy` to magically return request specific database connection. It's like "thread locals" but instead "local" to a particular request. So it should not be very hard to safely use multi-threaded workers.
 
 A few days ago I again started working on getting our codebase ready for multi-threaded deployments. Multi-threaded deployments are more memory efficient for us, by a factor of ~2x-4x. So the toil of dealing with these problems is worth it.
 
