@@ -1,0 +1,2790 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="870" onload="init(evt)" viewBox="0 0 1200 870" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#44475A" offset="5%" />
+		<stop stop-color="#44475A" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:#F8F8F2; }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (1 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "#FF5555";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="870.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >Web Worker</text>
+<text id="details" x="10.00" y="853" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="853" > </text>
+<g id="frames">
+<g >
+<title>has_permission (frappe/permissions.py:132) (17 samples, 0.43%)</title><rect x="543.1" y="340" width="5.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="546.14" y="350.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (49 samples, 1.23%)</title><rect x="362.7" y="564" width="14.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="365.67" y="574.5" ></text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (113 samples, 2.83%)</title><rect x="892.3" y="404" width="33.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="895.27" y="414.5" >ge..</text>
+</g>
+<g >
+<title>_parse_field_descriptor (pymysql/protocol.py:241) (13 samples, 0.33%)</title><rect x="387.5" y="596" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="390.48" y="606.5" ></text>
+</g>
+<g >
+<title>_worker (concurrent/futures/thread.py:93) (3,969 samples, 99.35%)</title><rect x="17.7" y="100" width="1172.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.68" y="110.5" >_worker (concurrent/futures/thread.py:93)</text>
+</g>
+<g >
+<title>meta (frappe/model/base_document.py:155) (247 samples, 6.18%)</title><rect x="420.9" y="612" width="72.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.86" y="622.5" >meta (fr..</text>
+</g>
+<g >
+<title>stop (frappe/monitor.py:26) (114 samples, 2.85%)</title><rect x="710.3" y="292" width="33.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="713.32" y="302.5" >st..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (12 samples, 0.30%)</title><rect x="834.7" y="532" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="837.67" y="542.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (73 samples, 1.83%)</title><rect x="157.1" y="564" width="21.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="160.09" y="574.5" >_..</text>
+</g>
+<g >
+<title>readinto (socket.py:720) (64 samples, 1.60%)</title><rect x="223.8" y="548" width="19.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="558.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (7 samples, 0.18%)</title><rect x="754.0" y="388" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="757.04" y="398.5" ></text>
+</g>
+<g >
+<title>__init__ (pymysql/protocol.py:234) (17 samples, 0.43%)</title><rect x="248.7" y="564" width="5.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="251.66" y="574.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (7 samples, 0.18%)</title><rect x="1078.1" y="388" width="2.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1081.06" y="398.5" ></text>
+</g>
+<g >
+<title>apply (frappe/rate_limiter.py:18) (78 samples, 1.95%)</title><rect x="1054.7" y="292" width="23.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1057.72" y="302.5" >a..</text>
+</g>
+<g >
+<title>set_cookie (werkzeug/sansio/response.py:227) (8 samples, 0.20%)</title><rect x="745.8" y="292" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="748.76" y="302.5" ></text>
+</g>
+<g >
+<title>__init__ (frappe/model/base_document.py:143) (249 samples, 6.23%)</title><rect x="420.6" y="564" width="73.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.56" y="574.5" >__init__..</text>
+</g>
+<g >
+<title>hget (redis/commands/core.py:4970) (125 samples, 3.13%)</title><rect x="35.4" y="500" width="36.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.40" y="510.5" >hge..</text>
+</g>
+<g >
+<title>application (frappe/app.py:155) (20 samples, 0.50%)</title><rect x="744.6" y="244" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="747.58" y="254.5" ></text>
+</g>
+<g >
+<title>rpush (frappe/utils/redis_wrapper.py:155) (109 samples, 2.73%)</title><rect x="711.8" y="340" width="32.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="714.80" y="350.5" >rp..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (132 samples, 3.30%)</title><rect x="844.1" y="516" width="39.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="847.12" y="526.5" >_se..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (130 samples, 3.25%)</title><rect x="556.4" y="388" width="38.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="559.43" y="398.5" >_ex..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (67 samples, 1.68%)</title><rect x="960.8" y="436" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="963.79" y="446.5" ></text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:231) (215 samples, 5.38%)</title><rect x="422.3" y="660" width="63.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="425.34" y="670.5" >hget (..</text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:236) (6 samples, 0.15%)</title><rect x="1049.1" y="404" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1052.11" y="414.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (73 samples, 1.83%)</title><rect x="1055.9" y="388" width="21.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.90" y="398.5" >&lt;..</text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:215) (457 samples, 11.44%)</title><rect x="87.7" y="420" width="135.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="430.5" >sql (frappe/datab..</text>
+</g>
+<g >
+<title>_get_connection (frappe/database/mariadb/database.py:113) (455 samples, 11.39%)</title><rect x="87.7" y="468" width="134.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="478.5" >_get_connection ..</text>
+</g>
+<g >
+<title>load_from_db (frappe/model/document.py:263) (813 samples, 20.35%)</title><rect x="256.3" y="404" width="240.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="259.34" y="414.5" >load_from_db (frappe/model/docu..</text>
+</g>
+<g >
+<title>send_command (redis/connection.py:556) (12 samples, 0.30%)</title><rect x="840.0" y="532" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="842.99" y="542.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (5 samples, 0.13%)</title><rect x="352.0" y="548" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="355.04" y="558.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (75 samples, 1.88%)</title><rect x="987.4" y="436" width="22.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="990.38" y="446.5" >r..</text>
+</g>
+<g >
+<title>send_headers (gunicorn/http/wsgi.py:331) (22 samples, 0.55%)</title><rect x="1114.7" y="180" width="6.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1117.68" y="190.5" ></text>
+</g>
+<g >
+<title>connect (pymysql/connections.py:649) (13 samples, 0.33%)</title><rect x="88.6" y="516" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="91.57" y="526.5" ></text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:236) (27 samples, 0.68%)</title><rect x="485.8" y="660" width="8.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="488.84" y="670.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:771) (12 samples, 0.30%)</title><rect x="656.9" y="388" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="659.86" y="398.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (200 samples, 5.01%)</title><rect x="756.4" y="372" width="59.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="759.40" y="382.5" >call_w..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:804) (15 samples, 0.38%)</title><rect x="259.6" y="516" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="262.59" y="526.5" ></text>
+</g>
+<g >
+<title>parse (gunicorn/http/message.py:269) (18 samples, 0.45%)</title><rect x="19.7" y="196" width="5.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.75" y="206.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (124 samples, 3.10%)</title><rect x="500.0" y="468" width="36.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="503.02" y="478.5" >_se..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (78 samples, 1.95%)</title><rect x="930.1" y="404" width="23.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.08" y="414.5" >c..</text>
+</g>
+<g >
+<title>get_all_languages (frappe/translate.py:952) (85 samples, 2.13%)</title><rect x="957.2" y="340" width="25.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.25" y="350.5" >g..</text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1199) (95 samples, 2.38%)</title><rect x="677.2" y="388" width="28.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="680.24" y="398.5" >r..</text>
+</g>
+<g >
+<title>query (pymysql/connections.py:563) (107 samples, 2.68%)</title><rect x="223.8" y="468" width="31.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="478.5" >qu..</text>
+</g>
+<g >
+<title>get_defaults (frappe/database/database.py:1123) (112 samples, 2.80%)</title><rect x="1017.8" y="372" width="33.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1020.80" y="382.5" >ge..</text>
+</g>
+<g >
+<title>_parse_field_descriptor (pymysql/protocol.py:242) (12 samples, 0.30%)</title><rect x="391.3" y="596" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="394.32" y="606.5" ></text>
+</g>
+<g >
+<title>send_packed_command (redis/connection.py:534) (12 samples, 0.30%)</title><rect x="840.0" y="548" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="842.99" y="558.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (7 samples, 0.18%)</title><rect x="928.0" y="420" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="931.01" y="430.5" ></text>
+</g>
+<g >
+<title>readinto (socket.py:720) (123 samples, 3.08%)</title><rect x="613.1" y="420" width="36.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="616.14" y="430.5" >rea..</text>
+</g>
+<g >
+<title>init_request (frappe/app.py:195) (8 samples, 0.20%)</title><rect x="827.3" y="260" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="830.29" y="270.5" ></text>
+</g>
+<g >
+<title>get_hooks (frappe/__init__.py:1593) (106 samples, 2.65%)</title><rect x="984.7" y="276" width="31.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="987.72" y="286.5" >ge..</text>
+</g>
+<g >
+<title>_read_ok_packet (pymysql/connections.py:1236) (12 samples, 0.30%)</title><rect x="662.2" y="388" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="665.18" y="398.5" ></text>
+</g>
+<g >
+<title>readinto (socket.py:720) (61 samples, 1.53%)</title><rect x="188.4" y="580" width="18.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="191.40" y="590.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (118 samples, 2.95%)</title><rect x="93.3" y="548" width="34.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="96.29" y="558.5" >_r..</text>
+</g>
+<g >
+<title>call (frappe/__init__.py:1718) (114 samples, 2.85%)</title><rect x="710.3" y="276" width="33.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="713.32" y="286.5" >ca..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (104 samples, 2.60%)</title><rect x="559.7" y="484" width="30.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="562.68" y="494.5" >re..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (53 samples, 1.33%)</title><rect x="962.6" y="516" width="15.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="965.57" y="526.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (92 samples, 2.30%)</title><rect x="502.1" y="516" width="27.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="505.09" y="526.5" >r..</text>
+</g>
+<g >
+<title>init_request (frappe/app.py:198) (524 samples, 13.12%)</title><rect x="829.6" y="260" width="154.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="832.65" y="270.5" >init_request (frapp..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (108 samples, 2.70%)</title><rect x="845.6" y="580" width="31.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="848.60" y="590.5" >re..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (268 samples, 6.71%)</title><rect x="267.6" y="548" width="79.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="270.56" y="558.5" >_read_byt..</text>
+</g>
+<g >
+<title>rpush (redis/commands/core.py:2818) (107 samples, 2.68%)</title><rect x="712.4" y="356" width="31.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.39" y="366.5" >rp..</text>
+</g>
+<g >
+<title>get_connection (frappe/database/mariadb/database.py:107) (455 samples, 11.39%)</title><rect x="87.7" y="452" width="134.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="462.5" >get_connection (..</text>
+</g>
+<g >
+<title>_get_descriptions (pymysql/connections.py:1367) (34 samples, 0.85%)</title><rect x="243.6" y="532" width="10.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="246.64" y="542.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (5 samples, 0.13%)</title><rect x="1076.0" y="420" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1078.99" y="430.5" ></text>
+</g>
+<g >
+<title>_bootstrap_inner (threading.py:1075) (3,969 samples, 99.35%)</title><rect x="17.7" y="68" width="1172.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.68" y="78.5" >_bootstrap_inner (threading.py:1075)</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (148 samples, 3.70%)</title><rect x="839.4" y="500" width="43.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="842.40" y="510.5" >&lt;lam..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (105 samples, 2.63%)</title><rect x="1140.7" y="324" width="31.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1143.67" y="334.5" >re..</text>
+</g>
+<g >
+<title>spawn_workers (gunicorn/arbiter.py:642) (25 samples, 0.63%)</title><rect x="10.3" y="148" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="158.5" ></text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:238) (110 samples, 2.75%)</title><rect x="223.0" y="420" width="32.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="225.96" y="430.5" >sq..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:575) (10 samples, 0.25%)</title><rect x="536.9" y="420" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="539.94" y="430.5" ></text>
+</g>
+<g >
+<title>_read_result_packet (pymysql/connections.py:1283) (27 samples, 0.68%)</title><rect x="406.4" y="532" width="8.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="409.39" y="542.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (74 samples, 1.85%)</title><rect x="156.8" y="548" width="21.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="159.80" y="558.5" >_..</text>
+</g>
+<g >
+<title>__init__ (pymysql/protocol.py:234) (47 samples, 1.18%)</title><rect x="387.5" y="580" width="13.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="390.48" y="590.5" ></text>
+</g>
+<g >
+<title>_execute_command (pymysql/connections.py:864) (25 samples, 0.63%)</title><rect x="259.6" y="500" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="262.59" y="510.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (62 samples, 1.55%)</title><rect x="1084.0" y="452" width="18.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1086.96" y="462.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (63 samples, 1.58%)</title><rect x="187.8" y="564" width="18.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="190.81" y="574.5" ></text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:236) (52 samples, 1.30%)</title><rect x="72.3" y="484" width="15.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="75.32" y="494.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (111 samples, 2.78%)</title><rect x="39.2" y="580" width="32.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="42.24" y="590.5" >_s..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (73 samples, 1.83%)</title><rect x="1055.9" y="356" width="21.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.90" y="366.5" >_..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (150 samples, 3.75%)</title><rect x="838.8" y="468" width="44.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="841.81" y="478.5" >_exe..</text>
+</g>
+<g >
+<title>set_user_info (frappe/auth.py:208) (89 samples, 2.23%)</title><rect x="927.7" y="324" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="334.5" >s..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (84 samples, 2.10%)</title><rect x="899.9" y="500" width="24.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="902.95" y="510.5" >p..</text>
+</g>
+<g >
+<title>readinto (socket.py:720) (67 samples, 1.68%)</title><rect x="158.9" y="580" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="161.87" y="590.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (125 samples, 3.13%)</title><rect x="35.4" y="516" width="36.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.40" y="526.5" >exe..</text>
+</g>
+<g >
+<title>handle (frappe/api/__init__.py:55) (21 samples, 0.53%)</title><rect x="601.9" y="260" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="604.92" y="270.5" ></text>
+</g>
+<g >
+<title>readinto (socket.py:720) (115 samples, 2.88%)</title><rect x="94.2" y="580" width="33.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="97.18" y="590.5" >re..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:594) (5 samples, 0.13%)</title><rect x="478.2" y="772" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="481.16" y="782.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (78 samples, 1.95%)</title><rect x="987.4" y="388" width="23.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="990.38" y="398.5" >_..</text>
+</g>
+<g >
+<title>make_form_dict (frappe/app.py:313) (7 samples, 0.18%)</title><rect x="827.3" y="276" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="830.29" y="286.5" ></text>
+</g>
+<g >
+<title>read_doc (frappe/api/v1.py:75) (175 samples, 4.38%)</title><rect x="496.5" y="276" width="51.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="499.47" y="286.5" >read_..</text>
+</g>
+<g >
+<title>autocommit (pymysql/connections.py:447) (42 samples, 1.05%)</title><rect x="208.8" y="532" width="12.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="211.78" y="542.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (64 samples, 1.60%)</title><rect x="1083.4" y="436" width="18.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1086.37" y="446.5" ></text>
+</g>
+<g >
+<title>__init__ (frappe/auth.py:136) (92 samples, 2.30%)</title><rect x="927.1" y="308" width="27.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.12" y="318.5" >_..</text>
+</g>
+<g >
+<title>get_defaults_for (frappe/defaults.py:233) (112 samples, 2.80%)</title><rect x="1017.8" y="388" width="33.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1020.80" y="398.5" >ge..</text>
+</g>
+<g >
+<title>_send_autocommit_mode (pymysql/connections.py:468) (39 samples, 0.98%)</title><rect x="209.7" y="548" width="11.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="212.67" y="558.5" ></text>
+</g>
+<g >
+<title>close (frappe/database/database.py:1329) (25 samples, 0.63%)</title><rect x="1122.7" y="196" width="7.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1125.66" y="206.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (130 samples, 3.25%)</title><rect x="556.4" y="404" width="38.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="559.43" y="414.5" >cal..</text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (115 samples, 2.88%)</title><rect x="559.1" y="468" width="34.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="562.09" y="478.5" >re..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (8 samples, 0.20%)</title><rect x="699.7" y="420" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="702.69" y="430.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (126 samples, 3.15%)</title><rect x="499.4" y="452" width="37.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="502.43" y="462.5" >&lt;la..</text>
+</g>
+<g >
+<title>get_cached_doc (frappe/__init__.py:1151) (120 samples, 3.00%)</title><rect x="891.7" y="372" width="35.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="894.68" y="382.5" >get..</text>
+</g>
+<g >
+<title>get_meta (frappe/model/meta.py:78) (173 samples, 4.33%)</title><rect x="549.9" y="324" width="51.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="552.93" y="334.5" >get_m..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (81 samples, 2.03%)</title><rect x="986.5" y="340" width="23.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="989.49" y="350.5" >_..</text>
+</g>
+<g >
+<title>run (gunicorn/app/wsgiapp.py:67) (25 samples, 0.63%)</title><rect x="10.3" y="68" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="78.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (94 samples, 2.35%)</title><rect x="897.0" y="436" width="27.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="899.99" y="446.5" >_..</text>
+</g>
+<g >
+<title>_get_server_information (pymysql/connections.py:1098) (153 samples, 3.83%)</title><rect x="93.3" y="532" width="45.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="96.29" y="542.5" >_get..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (94 samples, 2.35%)</title><rect x="897.0" y="468" width="27.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="899.99" y="478.5" >&lt;..</text>
+</g>
+<g >
+<title>_request_authentication (pymysql/connections.py:957) (90 samples, 2.25%)</title><rect x="156.5" y="532" width="26.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="159.50" y="542.5" >_..</text>
+</g>
+<g >
+<title>scramble_native_password (pymysql/_auth.py:36) (5 samples, 0.13%)</title><rect x="146.2" y="548" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="149.17" y="558.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (13 samples, 0.33%)</title><rect x="551.1" y="452" width="3.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="554.12" y="462.5" ></text>
+</g>
+<g >
+<title>hget (redis/commands/core.py:4970) (215 samples, 5.38%)</title><rect x="422.3" y="676" width="63.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="425.34" y="686.5" >hget (..</text>
+</g>
+<g >
+<title>_execute_pipeline (redis/client.py:1439) (143 samples, 3.58%)</title><rect x="1137.4" y="260" width="42.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1140.42" y="270.5" >_ex..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (147 samples, 3.68%)</title><rect x="426.8" y="820" width="43.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="429.77" y="830.5" >read..</text>
+</g>
+<g >
+<title>get_data (werkzeug/wrappers/request.py:419) (7 samples, 0.18%)</title><rect x="827.3" y="292" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="830.29" y="302.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (6 samples, 0.15%)</title><rect x="36.0" y="596" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.99" y="606.5" ></text>
+</g>
+<g >
+<title>set_lang (frappe/auth.py:97) (97 samples, 2.43%)</title><rect x="954.9" y="292" width="28.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="957.89" y="302.5" >se..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (70 samples, 1.75%)</title><rect x="930.7" y="452" width="20.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.67" y="462.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (201 samples, 5.03%)</title><rect x="756.1" y="356" width="59.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="759.10" y="366.5" >_execu..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (7 samples, 0.18%)</title><rect x="243.9" y="548" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="246.93" y="558.5" ></text>
+</g>
+<g >
+<title>__init__ (gunicorn/http/message.py:257) (31 samples, 0.78%)</title><rect x="19.5" y="164" width="9.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.45" y="174.5" ></text>
+</g>
+<g >
+<title>__get__ (functools.py:995) (179 samples, 4.48%)</title><rect x="34.8" y="420" width="52.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.81" y="430.5" >__get..</text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (6 samples, 0.15%)</title><rect x="36.0" y="564" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.99" y="574.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (88 samples, 2.20%)</title><rect x="898.8" y="484" width="26.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="901.77" y="494.5" >_..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:804) (9 samples, 0.23%)</title><rect x="1123.2" y="228" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1126.25" y="238.5" ></text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (79 samples, 1.98%)</title><rect x="957.5" y="372" width="23.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.54" y="382.5" >g..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (79 samples, 1.98%)</title><rect x="957.5" y="356" width="23.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.54" y="366.5" >g..</text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (89 samples, 2.23%)</title><rect x="984.7" y="308" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="987.72" y="318.5" >g..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (126 samples, 3.15%)</title><rect x="499.4" y="436" width="37.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="502.43" y="446.5" >cal..</text>
+</g>
+<g >
+<title>__next__ (gunicorn/http/parser.py:42) (31 samples, 0.78%)</title><rect x="19.5" y="148" width="9.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.45" y="158.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (105 samples, 2.63%)</title><rect x="39.2" y="628" width="31.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="42.24" y="638.5" >re..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (6 samples, 0.15%)</title><rect x="556.7" y="436" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="559.73" y="446.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (75 samples, 1.88%)</title><rect x="900.2" y="532" width="22.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="903.24" y="542.5" >r..</text>
+</g>
+<g >
+<title>validate_user (frappe/sessions.py:228) (190 samples, 4.76%)</title><rect x="832.6" y="372" width="56.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="835.60" y="382.5" >valid..</text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (7 samples, 0.18%)</title><rect x="754.0" y="404" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="757.04" y="414.5" ></text>
+</g>
+<g >
+<title>get_db (frappe/database/__init__.py:63) (7 samples, 0.18%)</title><rect x="824.6" y="292" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="827.63" y="302.5" ></text>
+</g>
+<g >
+<title>has_permission (frappe/permissions.py:116) (153 samples, 3.83%)</title><rect x="497.1" y="340" width="45.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.06" y="350.5" >has_..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (110 samples, 2.75%)</title><rect x="845.3" y="564" width="32.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="848.30" y="574.5" >re..</text>
+</g>
+<g >
+<title>get_system_settings (frappe/__init__.py:2344) (122 samples, 3.05%)</title><rect x="891.1" y="356" width="36.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="894.09" y="366.5" >get..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (93 samples, 2.33%)</title><rect x="714.8" y="388" width="27.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="717.75" y="398.5" >_..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:806) (12 samples, 0.30%)</title><rect x="184.0" y="564" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="186.97" y="574.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (143 samples, 3.58%)</title><rect x="497.7" y="404" width="42.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.65" y="414.5" >exe..</text>
+</g>
+<g >
+<title>chunk (gunicorn/http/unreader.py:64) (18 samples, 0.45%)</title><rect x="19.7" y="244" width="5.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.75" y="254.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (179 samples, 4.48%)</title><rect x="425.0" y="772" width="52.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="427.99" y="782.5" >parse..</text>
+</g>
+<g >
+<title>all (3,995 samples, 100%)</title><rect x="10.0" y="36" width="1180.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.00" y="46.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (15 samples, 0.38%)</title><rect x="834.4" y="500" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="837.38" y="510.5" ></text>
+</g>
+<g >
+<title>query (pymysql/connections.py:562) (26 samples, 0.65%)</title><rect x="259.3" y="484" width="7.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="262.29" y="494.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (81 samples, 2.03%)</title><rect x="1081.0" y="388" width="23.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1084.01" y="398.5" >&lt;..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (9 samples, 0.23%)</title><rect x="812.8" y="420" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="815.81" y="430.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (64 samples, 1.60%)</title><rect x="223.8" y="532" width="19.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="542.5" ></text>
+</g>
+<g >
+<title>__init__ (frappe/auth.py:135) (124 samples, 3.10%)</title><rect x="890.5" y="308" width="36.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="893.50" y="318.5" >__i..</text>
+</g>
+<g >
+<title>application (frappe/app.py:100) (5 samples, 0.13%)</title><rect x="30.7" y="244" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.68" y="254.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (89 samples, 2.23%)</title><rect x="927.7" y="372" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="382.5" >e..</text>
+</g>
+<g >
+<title>finish_request (gunicorn/workers/gthread.py:258) (6 samples, 0.15%)</title><rect x="1181.4" y="164" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1184.43" y="174.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (34 samples, 0.85%)</title><rect x="209.7" y="596" width="10.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="212.67" y="606.5" ></text>
+</g>
+<g >
+<title>get_doc_str (frappe/model/document.py:90) (1,566 samples, 39.20%)</title><rect x="33.9" y="324" width="462.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.92" y="334.5" >get_doc_str (frappe/model/document.py:90)</text>
+</g>
+<g >
+<title>init_request (frappe/app.py:200) (107 samples, 2.68%)</title><rect x="984.4" y="260" width="31.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="987.42" y="270.5" >in..</text>
+</g>
+<g >
+<title>on_client_socket_readable (gunicorn/workers/gthread.py:137) (11 samples, 0.28%)</title><rect x="11.8" y="228" width="3.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="14.77" y="238.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (75 samples, 1.88%)</title><rect x="930.7" y="436" width="22.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.67" y="446.5" >_..</text>
+</g>
+<g >
+<title>application (frappe/app.py:117) (1,949 samples, 48.79%)</title><rect x="32.4" y="244" width="575.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="35.45" y="254.5" >application (frappe/app.py:117)</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (84 samples, 2.10%)</title><rect x="1080.1" y="356" width="24.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1083.12" y="366.5" >_..</text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (162 samples, 4.06%)</title><rect x="762.0" y="436" width="47.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="765.01" y="446.5" >read..</text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (105 samples, 2.63%)</title><rect x="1018.1" y="436" width="31.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.10" y="446.5" >ex..</text>
+</g>
+<g >
+<title>__init__ (frappe/database/database.py:87) (5 samples, 0.13%)</title><rect x="825.2" y="308" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="828.22" y="318.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (203 samples, 5.08%)</title><rect x="423.5" y="708" width="60.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="426.52" y="718.5" >_execu..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (174 samples, 4.36%)</title><rect x="760.2" y="420" width="51.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="763.24" y="430.5" >parse..</text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1199) (167 samples, 4.18%)</title><rect x="612.3" y="372" width="49.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="615.26" y="382.5" >read..</text>
+</g>
+<g >
+<title>init_request (frappe/app.py:188) (14 samples, 0.35%)</title><rect x="822.9" y="260" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="825.86" y="270.5" ></text>
+</g>
+<g >
+<title>init_process (gunicorn/workers/gthread.py:95) (25 samples, 0.63%)</title><rect x="10.3" y="180" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="190.5" ></text>
+</g>
+<g >
+<title>getaddrinfo (socket.py:976) (5 samples, 0.13%)</title><rect x="88.6" y="548" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="91.57" y="558.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (74 samples, 1.85%)</title><rect x="1024.0" y="516" width="21.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1027.00" y="526.5" >p..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (17 samples, 0.43%)</title><rect x="129.3" y="548" width="5.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="132.33" y="558.5" ></text>
+</g>
+<g >
+<title>as_json (frappe/utils/response.py:139) (16 samples, 0.40%)</title><rect x="603.4" y="292" width="4.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="606.40" y="302.5" ></text>
+</g>
+<g >
+<title>as_dict (frappe/model/base_document.py:507) (8 samples, 0.20%)</title><rect x="604.9" y="388" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="607.87" y="398.5" ></text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (171 samples, 4.28%)</title><rect x="833.2" y="436" width="50.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="836.19" y="446.5" >get (..</text>
+</g>
+<g >
+<title>create_connection (frappe/database/mariadb/database.py:116) (455 samples, 11.39%)</title><rect x="87.7" y="484" width="134.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="494.5" >create_connectio..</text>
+</g>
+<g >
+<title>_read_rowdata_packet (pymysql/connections.py:1334) (8 samples, 0.20%)</title><rect x="412.0" y="548" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="415.00" y="558.5" ></text>
+</g>
+<g >
+<title>start (frappe/monitor.py:21) (14 samples, 0.35%)</title><rect x="1105.2" y="292" width="4.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1108.23" y="302.5" ></text>
+</g>
+<g >
+<title>connect (frappe/__init__.py:296) (5 samples, 0.13%)</title><rect x="823.2" y="276" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="826.15" y="286.5" ></text>
+</g>
+<g >
+<title>run (concurrent/futures/thread.py:59) (3,936 samples, 98.52%)</title><rect x="18.0" y="116" width="1162.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.97" y="126.5" >run (concurrent/futures/thread.py:59)</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (8 samples, 0.20%)</title><rect x="699.7" y="404" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="702.69" y="414.5" ></text>
+</g>
+<g >
+<title>send_command (redis/connection.py:556) (7 samples, 0.18%)</title><rect x="1021.0" y="516" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1024.05" y="526.5" ></text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:238) (195 samples, 4.88%)</title><rect x="608.4" y="292" width="57.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.42" y="302.5" >sql (f..</text>
+</g>
+<g >
+<title>_request_authentication (pymysql/connections.py:913) (13 samples, 0.33%)</title><rect x="145.6" y="532" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="148.57" y="542.5" ></text>
+</g>
+<g >
+<title>hget (redis/commands/core.py:4970) (89 samples, 2.23%)</title><rect x="927.7" y="356" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="366.5" >h..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (87 samples, 2.18%)</title><rect x="502.7" y="532" width="25.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="505.68" y="542.5" >r..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (8 samples, 0.20%)</title><rect x="1021.0" y="500" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1024.05" y="510.5" ></text>
+</g>
+<g >
+<title>_read_ok_packet (pymysql/connections.py:453) (37 samples, 0.93%)</title><rect x="209.7" y="564" width="10.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="212.67" y="574.5" ></text>
+</g>
+<g >
+<title>process_response (frappe/app.py:261) (14 samples, 0.35%)</title><rect x="745.2" y="260" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="748.17" y="270.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (17 samples, 0.43%)</title><rect x="833.8" y="468" width="5.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="836.78" y="478.5" ></text>
+</g>
+<g >
+<title>handle_request (gunicorn/workers/gthread.py:347) (199 samples, 4.98%)</title><rect x="1121.8" y="148" width="58.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1124.77" y="158.5" >handle..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (150 samples, 3.75%)</title><rect x="762.9" y="468" width="44.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="765.90" y="478.5" >read..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (92 samples, 2.30%)</title><rect x="1020.5" y="468" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1023.46" y="478.5" >c..</text>
+</g>
+<g >
+<title>release_local (werkzeug/local.py:32) (15 samples, 0.38%)</title><rect x="1130.6" y="196" width="4.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1133.63" y="206.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (7 samples, 0.18%)</title><rect x="1078.1" y="404" width="2.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1081.06" y="414.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (20 samples, 0.50%)</title><rect x="550.5" y="420" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.53" y="430.5" ></text>
+</g>
+<g >
+<title>write (gunicorn/util.py:299) (22 samples, 0.55%)</title><rect x="1114.7" y="196" width="6.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1117.68" y="206.5" ></text>
+</g>
+<g >
+<title>__init__ (pymysql/connections.py:361) (450 samples, 11.26%)</title><rect x="88.3" y="500" width="132.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="91.27" y="510.5" >__init__ (pymysq..</text>
+</g>
+<g >
+<title>extend (frappe/model/base_document.py:321) (267 samples, 6.68%)</title><rect x="417.6" y="452" width="78.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="420.61" y="462.5" >extend (f..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (70 samples, 1.75%)</title><rect x="678.4" y="420" width="20.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="681.42" y="430.5" ></text>
+</g>
+<g >
+<title>get_meta (frappe/__init__.py:1310) (245 samples, 6.13%)</title><rect x="421.4" y="628" width="72.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="424.45" y="638.5" >get_meta..</text>
+</g>
+<g >
+<title>__init__ (frappe/model/document.py:174) (1,566 samples, 39.20%)</title><rect x="33.9" y="340" width="462.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.92" y="350.5" >__init__ (frappe/model/document.py:174)</text>
+</g>
+<g >
+<title>__contains__ (redis/client.py:64) (8 samples, 0.20%)</title><rect x="481.1" y="788" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="484.11" y="798.5" ></text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (7 samples, 0.18%)</title><rect x="1018.4" y="468" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.39" y="478.5" ></text>
+</g>
+<g >
+<title>init (frappe/__init__.py:284) (239 samples, 5.98%)</title><rect x="752.0" y="276" width="70.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="754.97" y="286.5" >init (f..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (116 samples, 2.90%)</title><rect x="37.8" y="564" width="34.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="574.5" >&lt;l..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (21 samples, 0.53%)</title><rect x="550.2" y="388" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.23" y="398.5" ></text>
+</g>
+<g >
+<title>send_command (redis/connection.py:556) (5 samples, 0.13%)</title><rect x="37.8" y="596" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="606.5" ></text>
+</g>
+<g >
+<title>log_query (frappe/database/mariadb/database.py:219) (5 samples, 0.13%)</title><rect x="707.4" y="324" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="710.37" y="334.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (68 samples, 1.70%)</title><rect x="719.2" y="500" width="20.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="722.18" y="510.5" ></text>
+</g>
+<g >
+<title>uuid4 (uuid.py:725) (9 samples, 0.23%)</title><rect x="1105.8" y="324" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1108.82" y="334.5" ></text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (171 samples, 4.28%)</title><rect x="833.2" y="420" width="50.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="836.19" y="430.5" >get_v..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (116 samples, 2.90%)</title><rect x="37.8" y="532" width="34.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="542.5" >_e..</text>
+</g>
+<g >
+<title>application (werkzeug/wrappers/request.py:193) (12 samples, 0.30%)</title><rect x="1109.4" y="228" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1112.36" y="238.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:771) (60 samples, 1.50%)</title><rect x="383.6" y="564" width="17.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="386.64" y="574.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (8 samples, 0.20%)</title><rect x="927.7" y="388" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="398.5" ></text>
+</g>
+<g >
+<title>_execute_command (pymysql/connections.py:864) (13 samples, 0.33%)</title><rect x="183.7" y="548" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="186.68" y="558.5" ></text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1206) (40 samples, 1.00%)</title><rect x="243.6" y="500" width="11.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="246.64" y="510.5" ></text>
+</g>
+<g >
+<title>set_result (concurrent/futures/_base.py:550) (30 samples, 0.75%)</title><rect x="1181.1" y="132" width="8.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1184.14" y="142.5" ></text>
+</g>
+<g >
+<title>__call__ (werkzeug/middleware/shared_data.py:250) (3,665 samples, 91.74%)</title><rect x="30.7" y="196" width="1082.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.68" y="206.5" >__call__ (werkzeug/middleware/shared_data.py:250)</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (10 samples, 0.25%)</title><rect x="1175.5" y="292" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1178.53" y="302.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (55 samples, 1.38%)</title><rect x="962.6" y="468" width="16.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="965.57" y="478.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (219 samples, 5.48%)</title><rect x="753.7" y="340" width="64.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="756.74" y="350.5" >execute..</text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (70 samples, 1.75%)</title><rect x="930.7" y="468" width="20.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.67" y="478.5" ></text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:95) (16 samples, 0.40%)</title><rect x="884.0" y="420" width="4.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="887.00" y="430.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (11 samples, 0.28%)</title><rect x="957.5" y="404" width="3.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.54" y="414.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (93 samples, 2.33%)</title><rect x="714.8" y="404" width="27.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="717.75" y="414.5" >c..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:95) (5 samples, 0.13%)</title><rect x="925.6" y="388" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="928.64" y="398.5" ></text>
+</g>
+<g >
+<title>__release_local__ (werkzeug/local.py:80) (15 samples, 0.38%)</title><rect x="1130.6" y="212" width="4.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1133.63" y="222.5" ></text>
+</g>
+<g >
+<title>sync_database (frappe/app.py:409) (341 samples, 8.54%)</title><rect x="608.1" y="260" width="100.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.12" y="270.5" >sync_databas..</text>
+</g>
+<g >
+<title>query (pymysql/connections.py:562) (27 samples, 0.68%)</title><rect x="669.3" y="356" width="7.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="672.26" y="366.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (8 samples, 0.20%)</title><rect x="958.4" y="436" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="961.43" y="446.5" ></text>
+</g>
+<g >
+<title>_read_rowdata_packet (pymysql/connections.py:1330) (18 samples, 0.45%)</title><rect x="406.4" y="548" width="5.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="409.39" y="558.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (6 samples, 0.15%)</title><rect x="36.0" y="580" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.99" y="590.5" ></text>
+</g>
+<g >
+<title>_read_query_result (pymysql/connections.py:825) (102 samples, 2.55%)</title><rect x="677.2" y="372" width="30.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="680.24" y="382.5" >_r..</text>
+</g>
+<g >
+<title>__init__ (frappe/sessions.py:220) (196 samples, 4.91%)</title><rect x="832.3" y="340" width="57.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="835.31" y="350.5" >__init..</text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1202) (12 samples, 0.30%)</title><rect x="662.2" y="372" width="3.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="665.18" y="382.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (154 samples, 3.85%)</title><rect x="762.6" y="452" width="45.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="765.60" y="462.5" >read..</text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (12 samples, 0.30%)</title><rect x="893.4" y="484" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="896.45" y="494.5" ></text>
+</g>
+<g >
+<title>get_meta (frappe/model/meta.py:78) (244 samples, 6.11%)</title><rect x="421.7" y="644" width="72.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="424.74" y="654.5" >get_meta..</text>
+</g>
+<g >
+<title>build_response (frappe/utils/response.py:90) (21 samples, 0.53%)</title><rect x="601.9" y="276" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="604.92" y="286.5" ></text>
+</g>
+<g >
+<title>_init_child (frappe/model/base_document.py:339) (264 samples, 6.61%)</title><rect x="418.2" y="484" width="78.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="421.20" y="494.5" >_init_chi..</text>
+</g>
+<g >
+<title>get_meta (frappe/__init__.py:1310) (176 samples, 4.41%)</title><rect x="549.0" y="308" width="52.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="552.05" y="318.5" >get_m..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (72 samples, 1.80%)</title><rect x="718.9" y="484" width="21.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="721.89" y="494.5" >r..</text>
+</g>
+<g >
+<title>__init__ (frappe/sessions.py:208) (5 samples, 0.13%)</title><rect x="830.2" y="340" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="833.24" y="350.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:575) (5 samples, 0.13%)</title><rect x="742.5" y="388" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="745.52" y="398.5" ></text>
+</g>
+<g >
+<title>run (concurrent/futures/thread.py:65) (32 samples, 0.80%)</title><rect x="1180.5" y="116" width="9.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1183.55" y="126.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (21 samples, 0.53%)</title><rect x="347.9" y="532" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="350.90" y="542.5" ></text>
+</g>
+<g >
+<title>_init_from_kwargs (frappe/model/document.py:182) (251 samples, 6.28%)</title><rect x="420.6" y="548" width="74.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.56" y="558.5" >_init_fr..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (92 samples, 2.30%)</title><rect x="1020.5" y="484" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1023.46" y="494.5" >&lt;..</text>
+</g>
+<g >
+<title>hget (redis/commands/core.py:4970) (105 samples, 2.63%)</title><rect x="1018.1" y="420" width="31.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.10" y="430.5" >hg..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (8 samples, 0.20%)</title><rect x="927.7" y="404" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="414.5" ></text>
+</g>
+<g >
+<title>run (gunicorn/workers/gthread.py:214) (15 samples, 0.38%)</title><rect x="11.8" y="212" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="14.77" y="222.5" ></text>
+</g>
+<g >
+<title>query (pymysql/connections.py:562) (12 samples, 0.30%)</title><rect x="608.7" y="340" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.71" y="350.5" ></text>
+</g>
+<g >
+<title>load_children_from_db (frappe/model/document.py:306) (267 samples, 6.68%)</title><rect x="417.6" y="420" width="78.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="420.61" y="430.5" >load_chil..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (6 samples, 0.15%)</title><rect x="960.8" y="452" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="963.79" y="462.5" ></text>
+</g>
+<g >
+<title>_query (pymysql/cursors.py:322) (129 samples, 3.23%)</title><rect x="669.3" y="340" width="38.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="672.26" y="350.5" >_qu..</text>
+</g>
+<g >
+<title>_read_query_result (pymysql/connections.py:825) (107 samples, 2.68%)</title><rect x="223.8" y="484" width="31.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="494.5" >_r..</text>
+</g>
+<g >
+<title>__call__ (werkzeug/wrappers/response.py:577) (6 samples, 0.15%)</title><rect x="1111.1" y="244" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1114.14" y="254.5" ></text>
+</g>
+<g >
+<title>get_attr (frappe/__init__.py:1703) (120 samples, 3.00%)</title><rect x="1016.3" y="292" width="35.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1019.32" y="302.5" >get..</text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (113 samples, 2.83%)</title><rect x="892.3" y="420" width="33.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="895.27" y="430.5" >ex..</text>
+</g>
+<g >
+<title>readinto (socket.py:720) (67 samples, 1.68%)</title><rect x="679.3" y="436" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="682.31" y="446.5" ></text>
+</g>
+<g >
+<title>_invoke_callbacks (concurrent/futures/_base.py:340) (30 samples, 0.75%)</title><rect x="1181.1" y="148" width="8.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1184.14" y="158.5" ></text>
+</g>
+<g >
+<title>release (redis/connection.py:1468) (5 samples, 0.13%)</title><rect x="538.1" y="436" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="541.12" y="446.5" ></text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (143 samples, 3.58%)</title><rect x="497.7" y="388" width="42.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.65" y="398.5" >get..</text>
+</g>
+<g >
+<title>run_after_request_hooks (frappe/app.py:165) (118 samples, 2.95%)</title><rect x="709.1" y="260" width="34.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="712.14" y="270.5" >ru..</text>
+</g>
+<g >
+<title>run (gunicorn/app/base.py:236) (25 samples, 0.63%)</title><rect x="10.3" y="84" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="94.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (13 samples, 0.33%)</title><rect x="406.4" y="564" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="409.39" y="574.5" ></text>
+</g>
+<g >
+<title>connect (pymysql/connections.py:684) (86 samples, 2.15%)</title><rect x="183.4" y="516" width="25.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="186.38" y="526.5" >c..</text>
+</g>
+<g >
+<title>__init__ (frappe/monitor.py:56) (11 samples, 0.28%)</title><rect x="1105.2" y="308" width="3.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1108.23" y="318.5" ></text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (92 samples, 2.30%)</title><rect x="1077.8" y="324" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1080.76" y="334.5" >g..</text>
+</g>
+<g >
+<title>get_data (gunicorn/http/message.py:260) (18 samples, 0.45%)</title><rect x="19.7" y="212" width="5.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.75" y="222.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (20 samples, 0.50%)</title><rect x="550.5" y="436" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.53" y="446.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (82 samples, 2.05%)</title><rect x="1023.4" y="500" width="24.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1026.41" y="510.5" >_..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (14 samples, 0.35%)</title><rect x="892.9" y="436" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="895.86" y="446.5" ></text>
+</g>
+<g >
+<title>__contains__ (redis/client.py:64) (6 samples, 0.15%)</title><rect x="881.3" y="548" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="884.34" y="558.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (8 samples, 0.20%)</title><rect x="1077.8" y="356" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1080.76" y="366.5" ></text>
+</g>
+<g >
+<title>destroy (frappe/__init__.py:391) (15 samples, 0.38%)</title><rect x="1130.6" y="180" width="4.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1133.63" y="190.5" ></text>
+</g>
+<g >
+<title>encode (json/encoder.py:200) (14 samples, 0.35%)</title><rect x="603.7" y="324" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="606.69" y="334.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (12 samples, 0.30%)</title><rect x="893.4" y="468" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="896.45" y="478.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (67 samples, 1.68%)</title><rect x="960.8" y="420" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="963.79" y="430.5" ></text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (7 samples, 0.18%)</title><rect x="712.7" y="420" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.68" y="430.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (5 samples, 0.13%)</title><rect x="897.3" y="484" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="900.29" y="494.5" ></text>
+</g>
+<g >
+<title>resume (frappe/sessions.py:304) (190 samples, 4.76%)</title><rect x="832.6" y="356" width="56.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="835.60" y="366.5" >resum..</text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:280) (5 samples, 0.13%)</title><rect x="707.4" y="308" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="710.37" y="318.5" ></text>
+</g>
+<g >
+<title>connect (pymysql/connections.py:668) (172 samples, 4.31%)</title><rect x="93.3" y="516" width="50.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="96.29" y="526.5" >conne..</text>
+</g>
+<g >
+<title>__init__ (frappe/auth.py:42) (422 samples, 10.56%)</title><rect x="830.2" y="276" width="124.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="833.24" y="286.5" >__init__ (frapp..</text>
+</g>
+<g >
+<title>_method (functools.py:946) (1,565 samples, 39.17%)</title><rect x="34.2" y="356" width="462.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.22" y="366.5" >_method (functools.py:946)</text>
+</g>
+<g >
+<title>__init__ (gunicorn/http/message.py:60) (27 samples, 0.68%)</title><rect x="19.7" y="180" width="8.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.75" y="190.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (177 samples, 4.43%)</title><rect x="425.6" y="788" width="52.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="428.58" y="798.5" >read_..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:806) (11 samples, 0.28%)</title><rect x="153.0" y="564" width="3.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="155.96" y="574.5" ></text>
+</g>
+<g >
+<title>resume (frappe/sessions.py:305) (5 samples, 0.13%)</title><rect x="888.7" y="356" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="891.72" y="366.5" ></text>
+</g>
+<g >
+<title>&lt;module&gt; (gunicorn:8) (25 samples, 0.63%)</title><rect x="10.3" y="52" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="62.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (71 samples, 1.78%)</title><rect x="1024.3" y="548" width="21.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1027.30" y="558.5" ></text>
+</g>
+<g >
+<title>setup_module_map (frappe/__init__.py:1631) (227 samples, 5.68%)</title><rect x="752.3" y="292" width="67.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="755.26" y="302.5" >setup_m..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:91) (10 samples, 0.25%)</title><rect x="67.3" y="644" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="70.30" y="654.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:91) (10 samples, 0.25%)</title><rect x="470.8" y="820" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="473.78" y="830.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (9 samples, 0.23%)</title><rect x="179.2" y="564" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="182.25" y="574.5" ></text>
+</g>
+<g >
+<title>call (frappe/__init__.py:1718) (185 samples, 4.63%)</title><rect x="1054.7" y="276" width="54.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1057.72" y="286.5" >call ..</text>
+</g>
+<g >
+<title>make_session (frappe/auth.py:224) (203 samples, 5.08%)</title><rect x="830.2" y="324" width="60.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="833.24" y="334.5" >make_s..</text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (214 samples, 5.36%)</title><rect x="422.6" y="692" width="63.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="425.63" y="702.5" >execut..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (34 samples, 0.85%)</title><rect x="209.7" y="580" width="10.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="212.67" y="590.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (5 samples, 0.13%)</title><rect x="985.0" y="388" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="988.01" y="398.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (81 samples, 2.03%)</title><rect x="986.5" y="356" width="23.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="989.49" y="366.5" >c..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (7 samples, 0.18%)</title><rect x="35.7" y="548" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.70" y="558.5" ></text>
+</g>
+<g >
+<title>register (selectors.py:359) (21 samples, 0.53%)</title><rect x="1183.8" y="180" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1186.80" y="190.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (6 samples, 0.15%)</title><rect x="1018.7" y="500" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.69" y="510.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (119 samples, 2.98%)</title><rect x="1139.2" y="292" width="35.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1142.20" y="302.5" >pa..</text>
+</g>
+<g >
+<title>get_language (frappe/translate.py:55) (91 samples, 2.28%)</title><rect x="955.5" y="308" width="26.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="958.48" y="318.5" >g..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (16 samples, 0.40%)</title><rect x="650.1" y="404" width="4.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="653.07" y="414.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (13 samples, 0.33%)</title><rect x="479.6" y="772" width="3.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="482.64" y="782.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:575) (8 samples, 0.20%)</title><rect x="483.5" y="708" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="486.48" y="718.5" ></text>
+</g>
+<g >
+<title>call (frappe/__init__.py:1716) (6 samples, 0.15%)</title><rect x="1052.9" y="276" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1055.95" y="286.5" ></text>
+</g>
+<g >
+<title>handle (gunicorn/workers/gthread.py:282) (3,900 samples, 97.62%)</title><rect x="28.6" y="132" width="1151.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="31.61" y="142.5" >handle (gunicorn/workers/gthread.py:282)</text>
+</g>
+<g >
+<title>application (frappe/app.py:149) (119 samples, 2.98%)</title><rect x="708.8" y="244" width="35.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="711.84" y="254.5" >ap..</text>
+</g>
+<g >
+<title>set_session (frappe/auth.py:76) (422 samples, 10.56%)</title><rect x="830.2" y="292" width="124.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="833.24" y="302.5" >set_session (fr..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (8 samples, 0.20%)</title><rect x="534.3" y="484" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="537.28" y="494.5" ></text>
+</g>
+<g >
+<title>run (gunicorn/arbiter.py:202) (25 samples, 0.63%)</title><rect x="10.3" y="116" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="126.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (152 samples, 3.80%)</title><rect x="550.2" y="372" width="44.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.23" y="382.5" >exec..</text>
+</g>
+<g >
+<title>load_from_db (frappe/model/document.py:223) (179 samples, 4.48%)</title><rect x="34.8" y="404" width="52.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.81" y="414.5" >load_..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (5 samples, 0.13%)</title><rect x="951.3" y="452" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="954.34" y="462.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (125 samples, 3.13%)</title><rect x="612.6" y="404" width="36.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="615.55" y="414.5" >_re..</text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (75 samples, 1.88%)</title><rect x="1055.3" y="340" width="22.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.31" y="350.5" >e..</text>
+</g>
+<g >
+<title>connect (frappe/database/database.py:120) (455 samples, 11.39%)</title><rect x="87.7" y="436" width="134.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="446.5" >connect (frappe/..</text>
+</g>
+<g >
+<title>_bootstrap (threading.py:1032) (3,969 samples, 99.35%)</title><rect x="17.7" y="52" width="1172.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.68" y="62.5" >_bootstrap (threading.py:1032)</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (69 samples, 1.73%)</title><rect x="1057.1" y="404" width="20.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1060.08" y="414.5" ></text>
+</g>
+<g >
+<title>load_from_db (frappe/model/document.py:237) (568 samples, 14.22%)</title><rect x="87.7" y="404" width="167.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="90.68" y="414.5" >load_from_db (frappe/..</text>
+</g>
+<g >
+<title>__init__ (frappe/auth.py:134) (204 samples, 5.11%)</title><rect x="830.2" y="308" width="60.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="833.24" y="318.5" >__init..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:766) (5 samples, 0.13%)</title><rect x="382.2" y="564" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="385.17" y="574.5" ></text>
+</g>
+<g >
+<title>__json__ (frappe/model/base_document.py:151) (10 samples, 0.25%)</title><rect x="604.9" y="372" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="607.87" y="382.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (75 samples, 1.88%)</title><rect x="987.4" y="420" width="22.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="990.38" y="430.5" >r..</text>
+</g>
+<g >
+<title>__init__ (frappe/auth.py:45) (97 samples, 2.43%)</title><rect x="954.9" y="276" width="28.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="957.89" y="286.5" >__..</text>
+</g>
+<g >
+<title>hget (redis/commands/core.py:4970) (152 samples, 3.80%)</title><rect x="550.2" y="356" width="44.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.23" y="366.5" >hget..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:1462) (136 samples, 3.40%)</title><rect x="1138.6" y="276" width="40.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1141.61" y="286.5" >par..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (13 samples, 0.33%)</title><rect x="406.4" y="580" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="409.39" y="590.5" ></text>
+</g>
+<g >
+<title>_read_result_packet (pymysql/connections.py:1282) (39 samples, 0.98%)</title><rect x="243.6" y="516" width="11.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="246.64" y="526.5" ></text>
+</g>
+<g >
+<title>__call__ (werkzeug/middleware/shared_data.py:250) (3,665 samples, 91.74%)</title><rect x="30.7" y="180" width="1082.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.68" y="190.5" >__call__ (werkzeug/middleware/shared_data.py:250)</text>
+</g>
+<g >
+<title>connect (frappe/__init__.py:322) (7 samples, 0.18%)</title><rect x="824.6" y="276" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="827.63" y="286.5" ></text>
+</g>
+<g >
+<title>update (frappe/rate_limiter.py:24) (151 samples, 3.78%)</title><rect x="1135.9" y="180" width="44.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1138.95" y="190.5" >upda..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (110 samples, 2.75%)</title><rect x="39.2" y="596" width="32.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="42.24" y="606.5" >pa..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (59 samples, 1.48%)</title><rect x="1057.1" y="452" width="17.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1060.08" y="462.5" ></text>
+</g>
+<g >
+<title>read (gunicorn/http/unreader.py:37) (18 samples, 0.45%)</title><rect x="19.7" y="228" width="5.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="22.75" y="238.5" ></text>
+</g>
+<g >
+<title>_init_str (frappe/model/document.py:204) (1,563 samples, 39.12%)</title><rect x="34.8" y="372" width="461.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.81" y="382.5" >_init_str (frappe/model/document.py:204)</text>
+</g>
+<g >
+<title>write_packet (pymysql/connections.py:732) (21 samples, 0.53%)</title><rect x="150.0" y="548" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="153.01" y="558.5" ></text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:238) (528 samples, 13.22%)</title><rect x="258.4" y="436" width="156.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="261.41" y="446.5" >sql (frappe/database..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (7 samples, 0.18%)</title><rect x="1078.1" y="372" width="2.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1081.06" y="382.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (92 samples, 2.30%)</title><rect x="1077.8" y="340" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1080.76" y="350.5" >e..</text>
+</g>
+<g >
+<title>dumps (json/__init__.py:238) (14 samples, 0.35%)</title><rect x="603.7" y="308" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="606.69" y="318.5" ></text>
+</g>
+<g >
+<title>_get_descriptions (pymysql/connections.py:1366) (5 samples, 0.13%)</title><rect x="359.7" y="548" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="362.72" y="558.5" ></text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:806) (10 samples, 0.25%)</title><rect x="264.0" y="516" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="267.02" y="526.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (117 samples, 2.93%)</title><rect x="845.0" y="548" width="34.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="848.01" y="558.5" >re..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (10 samples, 0.25%)</title><rect x="129.3" y="564" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="132.33" y="574.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (55 samples, 1.38%)</title><rect x="962.6" y="500" width="16.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="965.57" y="510.5" ></text>
+</g>
+<g >
+<title>create_connection (socket.py:841) (6 samples, 0.15%)</title><rect x="88.6" y="532" width="1.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="91.57" y="542.5" ></text>
+</g>
+<g >
+<title>iterencode (json/encoder.py:258) (13 samples, 0.33%)</title><rect x="604.0" y="340" width="3.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="606.99" y="350.5" ></text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (15 samples, 0.38%)</title><rect x="834.4" y="484" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="837.38" y="494.5" ></text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (12 samples, 0.30%)</title><rect x="893.4" y="452" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="896.45" y="462.5" ></text>
+</g>
+<g >
+<title>set (frappe/model/base_document.py:254) (267 samples, 6.68%)</title><rect x="417.6" y="436" width="78.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="420.61" y="446.5" >set (frap..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:804) (10 samples, 0.25%)</title><rect x="150.0" y="564" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="153.01" y="574.5" ></text>
+</g>
+<g >
+<title>init_process (gunicorn/workers/base.py:142) (25 samples, 0.63%)</title><rect x="10.3" y="196" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="206.5" ></text>
+</g>
+<g >
+<title>append (frappe/model/base_document.py:280) (265 samples, 6.63%)</title><rect x="418.2" y="468" width="78.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="421.20" y="478.5" >append (f..</text>
+</g>
+<g >
+<title>_read_ok_packet (pymysql/connections.py:1236) (6 samples, 0.15%)</title><rect x="705.6" y="404" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="708.59" y="414.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (15 samples, 0.38%)</title><rect x="839.7" y="516" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="842.69" y="526.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (73 samples, 1.83%)</title><rect x="1024.3" y="532" width="21.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1027.30" y="542.5" >r..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (121 samples, 3.03%)</title><rect x="844.7" y="532" width="35.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="847.71" y="542.5" >par..</text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (15 samples, 0.38%)</title><rect x="834.4" y="516" width="4.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="837.38" y="526.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (199 samples, 4.98%)</title><rect x="756.7" y="388" width="58.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="759.69" y="398.5" >&lt;lambd..</text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (75 samples, 1.88%)</title><rect x="718.3" y="468" width="22.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="721.30" y="478.5" >r..</text>
+</g>
+<g >
+<title>store (frappe/monitor.py:118) (5 samples, 0.13%)</title><rect x="710.3" y="324" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="713.32" y="334.5" ></text>
+</g>
+<g >
+<title>record (frappe/recorder.py:178) (92 samples, 2.30%)</title><rect x="1077.8" y="292" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1080.76" y="302.5" >r..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:132) (9 samples, 0.23%)</title><rect x="529.3" y="516" width="2.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="532.26" y="526.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (162 samples, 4.06%)</title><rect x="425.9" y="804" width="47.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="428.88" y="814.5" >read..</text>
+</g>
+<g >
+<title>_execute_command (pymysql/connections.py:864) (24 samples, 0.60%)</title><rect x="670.2" y="372" width="7.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="673.15" y="382.5" ></text>
+</g>
+<g >
+<title>handle_request (gunicorn/workers/gthread.py:334) (3,668 samples, 91.81%)</title><rect x="29.8" y="148" width="1083.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="32.79" y="158.5" >handle_request (gunicorn/workers/gthread.py:334)</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (7 samples, 0.18%)</title><rect x="712.7" y="388" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.68" y="398.5" ></text>
+</g>
+<g >
+<title>read_length_coded_string (pymysql/protocol.py:173) (7 samples, 0.18%)</title><rect x="389.3" y="612" width="2.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="392.25" y="622.5" ></text>
+</g>
+<g >
+<title>manage_workers (gunicorn/arbiter.py:571) (25 samples, 0.63%)</title><rect x="10.3" y="132" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="142.5" ></text>
+</g>
+<g >
+<title>init_request (frappe/app.py:175) (243 samples, 6.08%)</title><rect x="750.8" y="260" width="71.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="753.79" y="270.5" >init_req..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (64 samples, 1.60%)</title><rect x="223.8" y="516" width="19.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="526.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (92 samples, 2.30%)</title><rect x="1020.5" y="452" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1023.46" y="462.5" >_..</text>
+</g>
+<g >
+<title>execute (pymysql/cursors.py:153) (110 samples, 2.75%)</title><rect x="223.0" y="436" width="32.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="225.96" y="446.5" >ex..</text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:231) (125 samples, 3.13%)</title><rect x="35.4" y="484" width="36.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.40" y="494.5" >hge..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (89 samples, 2.23%)</title><rect x="984.7" y="292" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="987.72" y="302.5" >g..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:128) (69 samples, 1.73%)</title><rect x="930.7" y="484" width="20.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.67" y="494.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (130 samples, 3.25%)</title><rect x="556.4" y="420" width="38.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="559.43" y="430.5" >&lt;la..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (10 samples, 0.25%)</title><rect x="378.9" y="564" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="381.92" y="574.5" ></text>
+</g>
+<g >
+<title>begin (frappe/database/database.py:1135) (144 samples, 3.60%)</title><rect x="666.3" y="292" width="42.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="669.31" y="302.5" >begi..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (68 samples, 1.70%)</title><rect x="930.7" y="500" width="20.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.67" y="510.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (8 samples, 0.20%)</title><rect x="1018.1" y="452" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.10" y="462.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (45 samples, 1.13%)</title><rect x="363.3" y="580" width="13.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="366.26" y="590.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (60 samples, 1.50%)</title><rect x="1057.1" y="436" width="17.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1060.08" y="446.5" ></text>
+</g>
+<g >
+<title>read_doc (frappe/api/v1.py:74) (1,567 samples, 39.22%)</title><rect x="33.6" y="276" width="462.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.63" y="286.5" >read_doc (frappe/api/v1.py:74)</text>
+</g>
+<g >
+<title>execute (pymysql/cursors.py:153) (195 samples, 4.88%)</title><rect x="608.4" y="308" width="57.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.42" y="318.5" >execut..</text>
+</g>
+<g >
+<title>release (redis/connection.py:1467) (5 samples, 0.13%)</title><rect x="815.5" y="372" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="818.47" y="382.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (61 samples, 1.53%)</title><rect x="1057.1" y="420" width="18.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1060.08" y="430.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (73 samples, 1.83%)</title><rect x="1055.9" y="372" width="21.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.90" y="382.5" >c..</text>
+</g>
+<g >
+<title>send_packed_command (redis/connection.py:534) (7 samples, 0.18%)</title><rect x="1021.0" y="532" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1024.05" y="542.5" ></text>
+</g>
+<g >
+<title>dump (frappe/monitor.py:113) (114 samples, 2.85%)</title><rect x="710.3" y="308" width="33.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="713.32" y="318.5" >du..</text>
+</g>
+<g >
+<title>init_request (frappe/app.py:201) (316 samples, 7.91%)</title><rect x="1016.0" y="260" width="93.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1019.03" y="270.5" >init_reques..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (114 samples, 2.85%)</title><rect x="892.0" y="388" width="33.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="894.97" y="398.5" >ge..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (14 samples, 0.35%)</title><rect x="347.9" y="548" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="350.90" y="558.5" ></text>
+</g>
+<g >
+<title>_method (functools.py:946) (255 samples, 6.38%)</title><rect x="420.6" y="516" width="75.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.56" y="526.5" >_method ..</text>
+</g>
+<g >
+<title>application (frappe/app.py:78) (3,664 samples, 91.71%)</title><rect x="30.7" y="212" width="1082.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.68" y="222.5" >application (frappe/app.py:78)</text>
+</g>
+<g >
+<title>_query (pymysql/cursors.py:322) (193 samples, 4.83%)</title><rect x="608.7" y="324" width="57.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.71" y="334.5" >_query..</text>
+</g>
+<g >
+<title>readinto (socket.py:720) (264 samples, 6.61%)</title><rect x="268.7" y="564" width="78.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="271.74" y="574.5" >readinto ..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:771) (21 samples, 0.53%)</title><rect x="247.5" y="548" width="6.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="250.48" y="558.5" ></text>
+</g>
+<g >
+<title>load_children_from_db (frappe/model/document.py:293) (541 samples, 13.54%)</title><rect x="256.6" y="420" width="159.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="259.63" y="430.5" >load_children_from_d..</text>
+</g>
+<g >
+<title>_get_descriptions (pymysql/connections.py:1369) (8 samples, 0.20%)</title><rect x="401.7" y="548" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="404.66" y="558.5" ></text>
+</g>
+<g >
+<title>__init__ (frappe/model/document.py:174) (261 samples, 6.53%)</title><rect x="418.8" y="500" width="77.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="421.79" y="510.5" >__init__..</text>
+</g>
+<g >
+<title>sql (frappe/database/database.py:238) (129 samples, 3.23%)</title><rect x="669.3" y="308" width="38.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="672.26" y="318.5" >sql..</text>
+</g>
+<g >
+<title>_parse_field_descriptor (pymysql/protocol.py:243) (9 samples, 0.23%)</title><rect x="394.9" y="596" width="2.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="397.87" y="606.5" ></text>
+</g>
+<g >
+<title>get_installed_apps (frappe/__init__.py:1525) (116 samples, 2.90%)</title><rect x="1017.5" y="324" width="34.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1020.50" y="334.5" >ge..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (93 samples, 2.33%)</title><rect x="714.8" y="420" width="27.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="717.75" y="430.5" >&lt;..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (11 samples, 0.28%)</title><rect x="893.7" y="500" width="3.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="896.74" y="510.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (79 samples, 1.98%)</title><rect x="957.5" y="388" width="23.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.54" y="398.5" >e..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (20 samples, 0.50%)</title><rect x="650.1" y="388" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="653.07" y="398.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (94 samples, 2.35%)</title><rect x="897.0" y="452" width="27.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="899.99" y="462.5" >c..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (78 samples, 1.95%)</title><rect x="930.1" y="388" width="23.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.08" y="398.5" >_..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (6 samples, 0.15%)</title><rect x="243.9" y="564" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="246.93" y="574.5" ></text>
+</g>
+<g >
+<title>get_user_lang (frappe/translate.py:103) (123 samples, 3.08%)</title><rect x="890.8" y="340" width="36.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="893.79" y="350.5" >get..</text>
+</g>
+<g >
+<title>start_response (gunicorn/http/wsgi.py:251) (6 samples, 0.15%)</title><rect x="1111.1" y="260" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1114.14" y="270.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (5 samples, 0.13%)</title><rect x="754.3" y="420" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="757.33" y="430.5" ></text>
+</g>
+<g >
+<title>setup_module_map (frappe/__init__.py:1655) (5 samples, 0.13%)</title><rect x="819.9" y="292" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="822.90" y="302.5" ></text>
+</g>
+<g >
+<title>application (werkzeug/wrappers/request.py:190) (3,652 samples, 91.41%)</title><rect x="30.7" y="228" width="1078.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.68" y="238.5" >application (werkzeug/wrappers/request.py:190)</text>
+</g>
+<g >
+<title>get_doc_permissions (frappe/permissions.py:214) (11 samples, 0.28%)</title><rect x="544.6" y="356" width="3.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="547.62" y="366.5" ></text>
+</g>
+<g >
+<title>__contains__ (redis/client.py:64) (5 samples, 0.13%)</title><rect x="1103.5" y="436" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1106.46" y="446.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (61 samples, 1.53%)</title><rect x="962.6" y="452" width="18.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="965.57" y="462.5" ></text>
+</g>
+<g >
+<title>readinto (socket.py:720) (34 samples, 0.85%)</title><rect x="209.7" y="612" width="10.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="212.67" y="622.5" ></text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1199) (305 samples, 7.63%)</title><rect x="267.0" y="516" width="90.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="269.97" y="526.5" >read (pymy..</text>
+</g>
+<g >
+<title>finish_request (gunicorn/workers/gthread.py:262) (23 samples, 0.58%)</title><rect x="1183.2" y="164" width="6.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1186.21" y="174.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:779) (10 samples, 0.25%)</title><rect x="378.9" y="580" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="381.92" y="590.5" ></text>
+</g>
+<g >
+<title>spawn_worker (gunicorn/arbiter.py:609) (25 samples, 0.63%)</title><rect x="10.3" y="164" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="174.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (115 samples, 2.88%)</title><rect x="1140.1" y="308" width="34.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1143.08" y="318.5" >re..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (5 samples, 0.13%)</title><rect x="37.8" y="580" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="590.5" ></text>
+</g>
+<g >
+<title>wrapper (frappe/model/utils/__init__.py:215) (1,567 samples, 39.22%)</title><rect x="33.6" y="308" width="462.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.63" y="318.5" >wrapper (frappe/model/utils/__init__.py:215)</text>
+</g>
+<g >
+<title>get_user_info (frappe/auth.py:179) (123 samples, 3.08%)</title><rect x="890.8" y="324" width="36.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="893.79" y="334.5" >get..</text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (201 samples, 5.03%)</title><rect x="424.1" y="740" width="59.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="427.11" y="750.5" >&lt;lambd..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:804) (8 samples, 0.20%)</title><rect x="608.7" y="372" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.71" y="382.5" ></text>
+</g>
+<g >
+<title>_execute_command (pymysql/connections.py:864) (12 samples, 0.30%)</title><rect x="608.7" y="356" width="3.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.71" y="366.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (77 samples, 1.93%)</title><rect x="930.1" y="420" width="22.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="933.08" y="430.5" >&lt;..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (269 samples, 6.73%)</title><rect x="267.3" y="532" width="79.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="270.27" y="542.5" >_read_pac..</text>
+</g>
+<g >
+<title>call (frappe/__init__.py:1714) (124 samples, 3.10%)</title><rect x="1016.3" y="276" width="36.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1019.32" y="286.5" >cal..</text>
+</g>
+<g >
+<title>destroy (frappe/__init__.py:389) (27 samples, 0.68%)</title><rect x="1122.7" y="180" width="7.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1125.66" y="190.5" ></text>
+</g>
+<g >
+<title>set_character_set (pymysql/connections.py:625) (14 samples, 0.35%)</title><rect x="183.4" y="532" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="186.38" y="542.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (148 samples, 3.70%)</title><rect x="839.4" y="484" width="43.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="842.40" y="494.5" >call..</text>
+</g>
+<g >
+<title>check_permission (frappe/model/document.py:322) (174 samples, 4.36%)</title><rect x="496.8" y="292" width="51.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="499.77" y="302.5" >check..</text>
+</g>
+<g >
+<title>read_length_coded_string (pymysql/protocol.py:173) (7 samples, 0.18%)</title><rect x="392.8" y="612" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="395.80" y="622.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (60 samples, 1.50%)</title><rect x="1084.0" y="468" width="17.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1086.96" y="478.5" ></text>
+</g>
+<g >
+<title>update (frappe/rate_limiter.py:77) (150 samples, 3.75%)</title><rect x="1136.2" y="196" width="44.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1139.24" y="206.5" >upda..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (5 samples, 0.13%)</title><rect x="959.0" y="468" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="962.02" y="478.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (74 samples, 1.85%)</title><rect x="1083.1" y="404" width="21.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1086.08" y="414.5" >_..</text>
+</g>
+<g >
+<title>handle (frappe/api/__init__.py:49) (1,925 samples, 48.19%)</title><rect x="33.0" y="260" width="568.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.04" y="270.5" >handle (frappe/api/__init__.py:49)</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:87) (7 samples, 0.18%)</title><rect x="928.0" y="452" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="931.01" y="462.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (107 samples, 2.68%)</title><rect x="712.4" y="372" width="31.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.39" y="382.5" >ex..</text>
+</g>
+<g >
+<title>get_cached_value (frappe/__init__.py:1214) (190 samples, 4.76%)</title><rect x="832.6" y="388" width="56.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="835.60" y="398.5" >get_c..</text>
+</g>
+<g >
+<title>close (werkzeug/wsgi.py:260) (199 samples, 4.98%)</title><rect x="1121.8" y="164" width="58.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1124.77" y="174.5" >close ..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:95) (7 samples, 0.18%)</title><rect x="540.2" y="372" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="543.19" y="382.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:771) (10 samples, 0.25%)</title><rect x="702.3" y="404" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="705.35" y="414.5" ></text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:132) (9 samples, 0.23%)</title><rect x="590.4" y="484" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="593.40" y="494.5" ></text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1206) (193 samples, 4.83%)</title><rect x="357.4" y="516" width="57.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="360.35" y="526.5" >read (..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (9 samples, 0.23%)</title><rect x="958.1" y="420" width="2.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="961.14" y="430.5" ></text>
+</g>
+<g >
+<title>get_meta (frappe/__init__.py:1310) (177 samples, 4.43%)</title><rect x="35.4" y="452" width="52.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.40" y="462.5" >get_m..</text>
+</g>
+<g >
+<title>get_doc (frappe/__init__.py:1283) (1,567 samples, 39.22%)</title><rect x="33.6" y="292" width="462.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="36.63" y="302.5" >get_doc (frappe/__init__.py:1283)</text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (75 samples, 1.88%)</title><rect x="1055.3" y="324" width="22.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.31" y="334.5" >g..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (7 samples, 0.18%)</title><rect x="712.7" y="404" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.68" y="414.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (55 samples, 1.38%)</title><rect x="962.6" y="484" width="16.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="965.57" y="494.5" ></text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (92 samples, 2.30%)</title><rect x="1077.8" y="308" width="27.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1080.76" y="318.5" >g..</text>
+</g>
+<g >
+<title>_read_query_result (pymysql/connections.py:825) (181 samples, 4.53%)</title><rect x="612.3" y="356" width="53.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="615.26" y="366.5" >_read..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (83 samples, 2.08%)</title><rect x="1080.4" y="372" width="24.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1083.42" y="382.5" >c..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (117 samples, 2.93%)</title><rect x="558.8" y="452" width="34.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="561.80" y="462.5" >pa..</text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:231) (152 samples, 3.80%)</title><rect x="550.2" y="340" width="44.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.23" y="350.5" >hget..</text>
+</g>
+<g >
+<title>__contains__ (redis/client.py:64) (6 samples, 0.15%)</title><rect x="813.7" y="436" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="816.70" y="446.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (126 samples, 3.15%)</title><rect x="499.4" y="420" width="37.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="502.43" y="430.5" >_ex..</text>
+</g>
+<g >
+<title>read_response (redis/_parsers/hiredis.py:132) (13 samples, 0.33%)</title><rect x="473.7" y="804" width="3.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="476.73" y="814.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (198 samples, 4.96%)</title><rect x="425.0" y="756" width="58.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="427.99" y="766.5" >_send_..</text>
+</g>
+<g >
+<title>__contains__ (redis/client.py:64) (5 samples, 0.13%)</title><rect x="535.2" y="500" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="538.17" y="510.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (68 samples, 1.70%)</title><rect x="1024.6" y="564" width="20.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1027.59" y="574.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (109 samples, 2.73%)</title><rect x="500.9" y="500" width="32.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="503.90" y="510.5" >re..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (5 samples, 0.13%)</title><rect x="985.0" y="340" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="988.01" y="350.5" ></text>
+</g>
+<g >
+<title>query (pymysql/connections.py:563) (181 samples, 4.53%)</title><rect x="612.3" y="340" width="53.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="615.26" y="350.5" >query..</text>
+</g>
+<g >
+<title>application (frappe/app.py:138) (341 samples, 8.54%)</title><rect x="608.1" y="244" width="100.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.12" y="254.5" >application ..</text>
+</g>
+<g >
+<title>meta (frappe/model/base_document.py:155) (179 samples, 4.48%)</title><rect x="34.8" y="436" width="52.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.81" y="446.5" >meta ..</text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (8 samples, 0.20%)</title><rect x="958.4" y="452" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="961.43" y="462.5" ></text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:806) (10 samples, 0.25%)</title><rect x="1125.9" y="228" width="3.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1128.90" y="238.5" ></text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (82 samples, 2.05%)</title><rect x="900.2" y="516" width="24.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="903.24" y="526.5" >r..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (8 samples, 0.20%)</title><rect x="1102.6" y="420" width="2.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1105.57" y="430.5" ></text>
+</g>
+<g >
+<title>_init_dict (frappe/model/document.py:213) (255 samples, 6.38%)</title><rect x="420.6" y="532" width="75.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.56" y="542.5" >_init_di..</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:567) (67 samples, 1.68%)</title><rect x="960.8" y="404" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="963.79" y="414.5" ></text>
+</g>
+<g >
+<title>_read_result_packet (pymysql/connections.py:1281) (6 samples, 0.15%)</title><rect x="357.4" y="532" width="1.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="360.35" y="542.5" ></text>
+</g>
+<g >
+<title>__call__ (frappe/middlewares.py:16) (3,666 samples, 91.76%)</title><rect x="30.4" y="164" width="1082.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="33.38" y="174.5" >__call__ (frappe/middlewares.py:16)</text>
+</g>
+<g >
+<title>connect (pymysql/connections.py:669) (133 samples, 3.33%)</title><rect x="144.1" y="516" width="39.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="147.10" y="526.5" >con..</text>
+</g>
+<g >
+<title>send_packed_command (redis/connection.py:534) (5 samples, 0.13%)</title><rect x="37.8" y="612" width="1.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="622.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:575) (5 samples, 0.13%)</title><rect x="1047.6" y="452" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1050.63" y="462.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (64 samples, 1.60%)</title><rect x="1083.4" y="420" width="18.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1086.37" y="430.5" ></text>
+</g>
+<g >
+<title>__init__ (frappe/rate_limiter.py:56) (75 samples, 1.88%)</title><rect x="1055.3" y="308" width="22.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1058.31" y="318.5" >_..</text>
+</g>
+<g >
+<title>rollback (frappe/database/database.py:1163) (197 samples, 4.93%)</title><rect x="608.1" y="276" width="58.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="611.12" y="286.5" >rollba..</text>
+</g>
+<g >
+<title>wrapper (frappe/utils/typing_validations.py:32) (85 samples, 2.13%)</title><rect x="957.2" y="324" width="25.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="960.25" y="334.5" >w..</text>
+</g>
+<g >
+<title>read_doc (frappe/api/v1.py:76) (181 samples, 4.53%)</title><rect x="548.2" y="276" width="53.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="551.16" y="286.5" >read_..</text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1202) (7 samples, 0.18%)</title><rect x="705.3" y="388" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="708.30" y="398.5" ></text>
+</g>
+<g >
+<title>run (gunicorn/app/base.py:72) (25 samples, 0.63%)</title><rect x="10.3" y="100" width="7.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="13.30" y="110.5" ></text>
+</g>
+<g >
+<title>query (pymysql/connections.py:563) (102 samples, 2.55%)</title><rect x="677.2" y="356" width="30.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="680.24" y="366.5" >qu..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (220 samples, 5.51%)</title><rect x="753.4" y="308" width="65.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="756.44" y="318.5" >get_val..</text>
+</g>
+<g >
+<title>get_meta (frappe/model/meta.py:78) (177 samples, 4.43%)</title><rect x="35.4" y="468" width="52.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.40" y="478.5" >get_m..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:771) (8 samples, 0.20%)</title><rect x="135.8" y="548" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="138.83" y="558.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (7 samples, 0.18%)</title><rect x="712.7" y="436" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="715.68" y="446.5" ></text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:231) (89 samples, 2.23%)</title><rect x="927.7" y="340" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="930.71" y="350.5" >h..</text>
+</g>
+<g >
+<title>read_response (redis/connection.py:592) (109 samples, 2.73%)</title><rect x="39.2" y="612" width="32.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="42.24" y="622.5" >re..</text>
+</g>
+<g >
+<title>set_character_set (pymysql/connections.py:626) (72 samples, 1.80%)</title><rect x="187.5" y="532" width="21.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="190.52" y="542.5" >s..</text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:231) (105 samples, 2.63%)</title><rect x="1018.1" y="404" width="31.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.10" y="414.5" >hg..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (105 samples, 2.63%)</title><rect x="1140.7" y="340" width="31.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1143.67" y="350.5" >re..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (74 samples, 1.85%)</title><rect x="900.2" y="548" width="21.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="903.24" y="558.5" >r..</text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (6 samples, 0.15%)</title><rect x="1018.7" y="484" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1021.69" y="494.5" ></text>
+</g>
+<g >
+<title>inner (frappe/permissions.py:49) (173 samples, 4.33%)</title><rect x="497.1" y="324" width="51.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.06" y="334.5" >inner..</text>
+</g>
+<g >
+<title>run (threading.py:1012) (3,969 samples, 99.35%)</title><rect x="17.7" y="84" width="1172.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.68" y="94.5" >run (threading.py:1012)</text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:575) (10 samples, 0.25%)</title><rect x="815.5" y="356" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="818.47" y="366.5" ></text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (113 samples, 2.83%)</title><rect x="500.6" y="484" width="33.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="503.61" y="494.5" >pa..</text>
+</g>
+<g >
+<title>wrapper (frappe/utils/caching.py:63) (118 samples, 2.95%)</title><rect x="1016.9" y="308" width="34.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1019.91" y="318.5" >wr..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:90) (143 samples, 3.58%)</title><rect x="497.7" y="372" width="42.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.65" y="382.5" >get..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (71 samples, 1.78%)</title><rect x="987.4" y="452" width="20.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="990.38" y="462.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (58 samples, 1.45%)</title><rect x="1057.1" y="468" width="17.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1060.08" y="478.5" ></text>
+</g>
+<g >
+<title>get_default (frappe/database/database.py:1107) (113 samples, 2.83%)</title><rect x="1017.5" y="356" width="33.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1020.50" y="366.5" >ge..</text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:806) (14 samples, 0.35%)</title><rect x="673.1" y="388" width="4.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="676.10" y="398.5" ></text>
+</g>
+<g >
+<title>can_read (redis/_parsers/hiredis.py:79) (7 samples, 0.18%)</title><rect x="928.0" y="436" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="931.01" y="446.5" ></text>
+</g>
+<g >
+<title>_request_authentication (pymysql/connections.py:956) (22 samples, 0.55%)</title><rect x="150.0" y="532" width="6.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="153.01" y="542.5" ></text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:541) (5 samples, 0.13%)</title><rect x="1081.6" y="404" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1084.60" y="414.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:1531) (146 samples, 3.65%)</title><rect x="1136.8" y="244" width="43.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1139.83" y="254.5" >&lt;lam..</text>
+</g>
+<g >
+<title>execute (redis/client.py:1530) (147 samples, 3.68%)</title><rect x="1136.5" y="212" width="43.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1139.54" y="222.5" >exec..</text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (94 samples, 2.35%)</title><rect x="39.5" y="644" width="27.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="42.54" y="654.5" >r..</text>
+</g>
+<g >
+<title>execute (pymysql/cursors.py:153) (527 samples, 13.19%)</title><rect x="258.7" y="452" width="155.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="261.70" y="462.5" >execute (pymysql/cu..</text>
+</g>
+<g >
+<title>handle_request (gunicorn/workers/gthread.py:340) (27 samples, 0.68%)</title><rect x="1113.5" y="148" width="8.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1116.50" y="158.5" ></text>
+</g>
+<g >
+<title>flush_cookies (frappe/auth.py:414) (10 samples, 0.25%)</title><rect x="745.2" y="276" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="748.17" y="286.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (171 samples, 4.28%)</title><rect x="833.2" y="452" width="50.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="836.19" y="462.5" >execu..</text>
+</g>
+<g >
+<title>_read_result_packet (pymysql/connections.py:1282) (160 samples, 4.01%)</title><rect x="359.1" y="532" width="47.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="362.13" y="542.5" >_rea..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (74 samples, 1.85%)</title><rect x="677.2" y="404" width="21.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="680.24" y="414.5" >_..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (201 samples, 5.03%)</title><rect x="424.1" y="724" width="59.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="427.11" y="734.5" >call_w..</text>
+</g>
+<g >
+<title>can_read (redis/connection.py:570) (5 samples, 0.13%)</title><rect x="985.0" y="372" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="988.01" y="382.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:747) (6 samples, 0.15%)</title><rect x="377.1" y="564" width="1.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="380.14" y="574.5" ></text>
+</g>
+<g >
+<title>store (frappe/monitor.py:119) (109 samples, 2.73%)</title><rect x="711.8" y="324" width="32.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="714.80" y="334.5" >st..</text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (125 samples, 3.13%)</title><rect x="612.6" y="388" width="36.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="615.55" y="398.5" >_re..</text>
+</g>
+<g >
+<title>_query (pymysql/cursors.py:322) (526 samples, 13.17%)</title><rect x="259.0" y="468" width="155.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="262.00" y="478.5" >_query (pymysql/cur..</text>
+</g>
+<g >
+<title>close (pymysql/connections.py:420) (19 samples, 0.48%)</title><rect x="1123.2" y="212" width="5.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1126.25" y="222.5" ></text>
+</g>
+<g >
+<title>_init_known_doc (frappe/model/document.py:192) (1,563 samples, 39.12%)</title><rect x="34.8" y="388" width="461.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="37.81" y="398.5" >_init_known_doc (frappe/model/document.py:192)</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (7 samples, 0.18%)</title><rect x="754.0" y="372" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="757.04" y="382.5" ></text>
+</g>
+<g >
+<title>execute (pymysql/cursors.py:153) (129 samples, 3.23%)</title><rect x="669.3" y="324" width="38.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="672.26" y="334.5" >exe..</text>
+</g>
+<g >
+<title>hget (frappe/utils/redis_wrapper.py:236) (20 samples, 0.50%)</title><rect x="595.1" y="340" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="598.13" y="350.5" ></text>
+</g>
+<g >
+<title>rollback (frappe/database/database.py:1164) (144 samples, 3.60%)</title><rect x="666.3" y="276" width="42.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="669.31" y="286.5" >roll..</text>
+</g>
+<g >
+<title>_get_descriptions (pymysql/connections.py:1367) (137 samples, 3.43%)</title><rect x="361.2" y="548" width="40.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="364.19" y="558.5" >_ge..</text>
+</g>
+<g >
+<title>get_cached_doc (frappe/__init__.py:1151) (190 samples, 4.76%)</title><rect x="832.6" y="404" width="56.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="835.60" y="414.5" >get_c..</text>
+</g>
+<g >
+<title>_query (pymysql/cursors.py:322) (110 samples, 2.75%)</title><rect x="223.0" y="452" width="32.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="225.96" y="462.5" >_q..</text>
+</g>
+<g >
+<title>read (pymysql/connections.py:1199) (67 samples, 1.68%)</title><rect x="223.8" y="500" width="19.8" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="226.85" y="510.5" ></text>
+</g>
+<g >
+<title>_parse_field_descriptor (pymysql/protocol.py:253) (5 samples, 0.13%)</title><rect x="399.9" y="596" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="402.89" y="606.5" ></text>
+</g>
+<g >
+<title>execute_command (redis/client.py:559) (89 samples, 2.23%)</title><rect x="984.7" y="324" width="26.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="987.72" y="334.5" >e..</text>
+</g>
+<g >
+<title>has_permission (frappe/model/document.py:337) (174 samples, 4.36%)</title><rect x="496.8" y="308" width="51.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="499.77" y="318.5" >has_p..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (191 samples, 4.78%)</title><rect x="759.1" y="404" width="56.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="762.06" y="414.5" >_send..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (75 samples, 1.88%)</title><rect x="987.4" y="404" width="22.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="990.38" y="414.5" >p..</text>
+</g>
+<g >
+<title>connect (pymysql/connections.py:697) (42 samples, 1.05%)</title><rect x="208.8" y="516" width="12.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="211.78" y="526.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:744) (63 samples, 1.58%)</title><rect x="187.8" y="548" width="18.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="190.81" y="558.5" ></text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (116 samples, 2.90%)</title><rect x="37.8" y="548" width="34.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="40.76" y="558.5" >ca..</text>
+</g>
+<g >
+<title>read_length_coded_string (pymysql/protocol.py:170) (5 samples, 0.13%)</title><rect x="391.3" y="612" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="394.32" y="622.5" ></text>
+</g>
+<g >
+<title>_write_bytes (pymysql/connections.py:804) (10 samples, 0.25%)</title><rect x="670.2" y="388" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="673.15" y="398.5" ></text>
+</g>
+<g >
+<title>__get__ (functools.py:995) (247 samples, 6.18%)</title><rect x="420.9" y="596" width="72.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.86" y="606.5" >__get__ ..</text>
+</g>
+<g >
+<title>_read_query_result (pymysql/connections.py:825) (499 samples, 12.49%)</title><rect x="267.0" y="500" width="147.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="269.97" y="510.5" >_read_query_result..</text>
+</g>
+<g >
+<title>call_with_retry (redis/retry.py:62) (146 samples, 3.65%)</title><rect x="1136.8" y="228" width="43.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1139.83" y="238.5" >call..</text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (5 samples, 0.13%)</title><rect x="132.3" y="564" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="135.28" y="574.5" ></text>
+</g>
+<g >
+<title>get_global (frappe/database/database.py:1103) (113 samples, 2.83%)</title><rect x="1017.5" y="340" width="33.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1020.50" y="350.5" >ge..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (123 samples, 3.08%)</title><rect x="558.5" y="436" width="36.3" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="561.50" y="446.5" >_se..</text>
+</g>
+<g >
+<title>get (redis/commands/core.py:1822) (220 samples, 5.51%)</title><rect x="753.4" y="324" width="65.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="756.44" y="334.5" >get (re..</text>
+</g>
+<g >
+<title>application (frappe/app.py:98) (1,215 samples, 30.41%)</title><rect x="750.5" y="244" width="358.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="753.49" y="254.5" >application (frappe/app.py:98)</text>
+</g>
+<g >
+<title>query (pymysql/connections.py:563) (499 samples, 12.49%)</title><rect x="267.0" y="484" width="147.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="269.97" y="494.5" >query (pymysql/con..</text>
+</g>
+<g >
+<title>parse (gunicorn/http/message.py:281) (5 samples, 0.13%)</title><rect x="26.2" y="196" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="29.25" y="206.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (7 samples, 0.18%)</title><rect x="35.7" y="532" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="38.70" y="542.5" ></text>
+</g>
+<g >
+<title>_get_table_fields (frappe/model/base_document.py:372) (249 samples, 6.23%)</title><rect x="420.6" y="580" width="73.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="423.56" y="590.5" >_get_tab..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:584) (77 samples, 1.93%)</title><rect x="717.7" y="452" width="22.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="720.70" y="462.5" >p..</text>
+</g>
+<g >
+<title>write (gunicorn/http/wsgi.py:335) (26 samples, 0.65%)</title><rect x="1113.5" y="164" width="7.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1116.50" y="174.5" ></text>
+</g>
+<g >
+<title>json_handler (frappe/utils/response.py:223) (10 samples, 0.25%)</title><rect x="604.9" y="356" width="2.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="607.87" y="366.5" ></text>
+</g>
+<g >
+<title>apply_fieldlevel_read_permissions (frappe/model/document.py:838) (176 samples, 4.41%)</title><rect x="549.0" y="292" width="52.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="552.05" y="302.5" >apply..</text>
+</g>
+<g >
+<title>parse_response (redis/client.py:596) (8 samples, 0.20%)</title><rect x="880.7" y="532" width="2.4" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="883.75" y="542.5" ></text>
+</g>
+<g >
+<title>is_table (frappe/__init__.py:1083) (153 samples, 3.83%)</title><rect x="497.1" y="356" width="45.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="500.06" y="366.5" >is_t..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (20 samples, 0.50%)</title><rect x="550.5" y="404" width="5.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="553.53" y="414.5" ></text>
+</g>
+<g >
+<title>_read_bytes (pymysql/connections.py:782) (116 samples, 2.90%)</title><rect x="93.9" y="564" width="34.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="96.88" y="574.5" >_r..</text>
+</g>
+<g >
+<title>handle (gunicorn/workers/gthread.py:277) (36 samples, 0.90%)</title><rect x="18.0" y="132" width="10.6" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="20.97" y="142.5" ></text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:95) (17 samples, 0.43%)</title><rect x="1011.0" y="292" width="5.0" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1014.01" y="302.5" ></text>
+</g>
+<g >
+<title>&lt;lambda&gt; (redis/client.py:568) (81 samples, 2.03%)</title><rect x="986.5" y="372" width="23.9" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="989.49" y="382.5" >&lt;..</text>
+</g>
+<g >
+<title>get_connection (redis/connection.py:1428) (5 samples, 0.13%)</title><rect x="985.0" y="356" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="988.01" y="366.5" ></text>
+</g>
+<g >
+<title>_execute_command (redis/client.py:565) (7 samples, 0.18%)</title><rect x="754.0" y="356" width="2.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="757.04" y="366.5" ></text>
+</g>
+<g >
+<title>read_from_socket (redis/_parsers/hiredis.py:88) (102 samples, 2.55%)</title><rect x="559.7" y="500" width="30.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="562.68" y="510.5" >re..</text>
+</g>
+<g >
+<title>_send_command_parse_response (redis/client.py:542) (85 samples, 2.13%)</title><rect x="717.1" y="436" width="25.1" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="720.11" y="446.5" >_..</text>
+</g>
+<g >
+<title>get_value (frappe/utils/redis_wrapper.py:95) (5 samples, 0.13%)</title><rect x="980.9" y="356" width="1.5" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="983.88" y="366.5" ></text>
+</g>
+<g >
+<title>_read_packet (pymysql/connections.py:763) (11 samples, 0.28%)</title><rect x="179.0" y="548" width="3.2" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="181.95" y="558.5" ></text>
+</g>
+<g >
+<title>__call__ (werkzeug/wrappers/response.py:576) (6 samples, 0.15%)</title><rect x="1109.4" y="244" width="1.7" height="15.0" fill="#6272A4" rx="2" ry="2" />
+<text  x="1112.36" y="254.5" ></text>
+</g>
+</g>
+</svg>
