@@ -1,7 +1,7 @@
 ---
 layout: post
-title:  "Missing the Forest for the Trees With Flamegraphs"
-description: "Overhead demons can be hiding in plain sight in pretty flamegraphs."
+title:  "Missing the Forest for the Trees With Flame Graphs"
+description: "Overhead demons can be hiding in plain sight in pretty flame graphs."
 date: 2024-12-29
 discussions:
 ---
@@ -11,7 +11,19 @@ discussions:
 
 Let's look at a real example. The following flame graph shows a web worker under a very common CRUD operation - read one document from the database and send it back as a JSON response. Currently highlighted stack is the actual operation of loading a document from the database; the rest are all pure overheads - authentication, rate limiting, serialization, etc.
 
-<object data="/assets/images/getdoc_flamegraph.svg?s=read_doc" type="image/svg+xml" style="width: 100%">
+<style>
+
+.flamegraph-container {
+  width: 100%;
+  @media (min-width: 1220px) {
+    width: 160%;
+    position: relative;
+    left: -30%;
+  }
+}
+</style>
+
+<object data="/assets/images/getdoc_flamegraph.svg?s=read_doc" type="image/svg+xml" class="flamegraph-container">
   <img src="/assets/images/getdoc_flamegraph.svg" />
 </object>
 
@@ -28,15 +40,16 @@ flamegraph.pl --reverse raw_input.txt > reversed.svg
 ```
 
 
-<object data="/assets/images/getdoc_flamegraph_reversed.svg?s=redis" type="image/svg+xml" style="width: 100%">
+<object data="/assets/images/getdoc_flamegraph_reversed.svg?s=redis" type="image/svg+xml" class="flamegraph-container">
   <img src="/assets/images/getdoc_flamegraph_reversed.svg?s=redis" />
 </object>
 
+
 Well, shiiit. Redis calls is where I should be spending my time. I need a _cache for our cache_ and something like [client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) can help here.
 
-P.S.: These flamegraphs are interactive on _modern_ browsers. Try to search for "redis" in the original top-down flamegraph.
+P.S.: These flame graphs are interactive on _modern_ browsers. Try to search for "redis" in the original top-down flame graph.
 
-P.P.S: This doesn't always seem to work because flamegraphs are typically used with sampling profilers. Sampling profilers can reliably identify work done higher up in call stacks but that reliability quickly drops down the lower you go in the call stack. Take some time to ponder about why it works this way. Few ways to address this problem:
+P.P.S: This doesn't always seem to work because flame graphs are typically used with sampling profilers. Sampling profilers can reliably identify work done higher up in call stacks but that reliability quickly drops down the lower you go in the call stack. Take some time to ponder about why it works this way. Few ways to address this problem:
 - Increase the sampling rate.
 - Use a tracing profiler.
 - Just manually inspect the tips of flames in top-down flame graphs and use search to highlight possible suspects.
