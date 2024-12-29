@@ -201,6 +201,7 @@ impl From<DirEntry> for Post {
 
         let mut markdown_options = markdown::Options::gfm();
         markdown_options.compile.allow_dangerous_html = true;
+        markdown_options.compile.gfm_tagfilter = false;
         let content = markdown::to_html_with_options(&body, &markdown_options).unwrap();
 
         Post {
