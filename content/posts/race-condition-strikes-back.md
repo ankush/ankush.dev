@@ -199,4 +199,4 @@ This bug eventually got fixed without us ever knowing about it when we refactore
 - If you answer "I don't know why" to the question of root cause, it means:
     - You don't want to spend effort to really find the root cause. This is rarely okay.
     - You simply don't have enough background knowledge required to even attempt root-causing the problem, this is fine! You get better at it by doing it more.
-- It's not possible to write a bug like this in Rust! But we probably won't be able to ship products with nearly half a million lines of "business logic" like the [ones we currently have](https://frappe.io/products). I am yet to find a good compromise.
+- It's ~~not possible~~ very hard to write a bug like this in a language like Rust, But we probably won't be able to ship products with nearly half a million lines of "business logic" like the [ones we currently have](https://frappe.io/products). I am yet to find a good compromise.
