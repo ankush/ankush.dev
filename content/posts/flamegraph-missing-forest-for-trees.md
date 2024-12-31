@@ -4,6 +4,9 @@ title:  "Missing the Forest for the Trees With Flame Graphs"
 description: "Overhead demons can be hiding in plain sight in pretty flame graphs."
 date: 2024-12-29
 discussions:
+  Lobsters: "https://lobste.rs/s/y62lgp/flame_graphs_can_hide_small_overheads"
+  LinkedIn: "https://www.linkedin.com/posts/ankushmenat_missing-the-forest-for-the-trees-with-flame-activity-7279499667296407553-9DfF"
+  HackerNews: "https://news.ycombinator.com/item?id=42555597"
 ---
 
 <br>
