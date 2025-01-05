@@ -1,6 +1,7 @@
-use axum::extract::{Path, State, Json};
+use axum::extract::{Json, Path, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect};
+use axum::ServiceExt;
 use axum::{response::Html, routing::{get, post}, Router};
 use chrono::NaiveDate;
 use minijinja::{context, Environment};
@@ -13,6 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
 use axum_response_cache::CacheLayer;
+use tower_http::normalize_path::NormalizePathLayer;
+use tower::Layer;
 #[allow(unused_imports)] // This is only used in debug build
 use tower_http::services::ServeDir;
 #[allow(unused_imports)] // This is only used in debug build
@@ -72,9 +75,11 @@ async fn main() {
     #[cfg(debug_assertions)]
     let app = app.layer(LiveReloadLayer::new());
 
+    let app = NormalizePathLayer::trim_trailing_slash().layer(app);
+
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, ServiceExt::<Request>::into_make_service(app)).await.unwrap();
 }
 
 fn get_jenv() -> Environment<'static> {
