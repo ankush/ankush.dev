@@ -15,7 +15,7 @@
 <time datetime={{ post.meta.date }} >{{ format_date(post.meta.date, false) }}</time>
 {%- if post.meta.discussions -%}
 {% for site, link in post.meta.discussions|items %}
-    · <a target="_blank" href="{{ link }}">{{ site }}</a>
+    · <a href="{{ link }}">{{ site }}</a>
 {% endfor %}
 {%- endif -%}
 
