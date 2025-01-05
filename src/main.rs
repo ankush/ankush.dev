@@ -2,7 +2,12 @@ use axum::extract::{Json, Path, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect};
 use axum::ServiceExt;
-use axum::{response::Html, routing::{get, post}, Router};
+use axum::{
+    response::Html,
+    routing::{get, post},
+    Router,
+};
+use axum_response_cache::CacheLayer;
 use chrono::NaiveDate;
 use minijinja::{context, Environment};
 use rusqlite::Connection;
@@ -13,9 +18,8 @@ use std::fs::{self, DirEntry};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time;
-use axum_response_cache::CacheLayer;
-use tower_http::normalize_path::NormalizePathLayer;
 use tower::Layer;
+use tower_http::normalize_path::NormalizePathLayer;
 #[allow(unused_imports)] // This is only used in debug build
 use tower_http::services::ServeDir;
 #[allow(unused_imports)] // This is only used in debug build
@@ -48,7 +52,7 @@ async fn main() {
         env,
         posts,
         page_hits: Default::default(),
-        db: Mutex::new(get_db())
+        db: Mutex::new(get_db()),
     });
 
     restore_views(app_state.clone());
@@ -59,11 +63,20 @@ async fn main() {
         });
     }
     let app = Router::new()
-        .route("/", get(homepage).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
+        .route(
+            "/",
+            get(homepage).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)),
+        )
         .route("/about", get(about))
-        .route("/p/:slug", get(get_posts).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
+        .route(
+            "/p/:slug",
+            get(get_posts).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)),
+        )
         .route("/:year/:month/:day/:slug", get(redirect_old_routes))
-        .route("/feed.xml", get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)))
+        .route(
+            "/feed.xml",
+            get(atom_feed).layer(CacheLayer::with_lifespan(RESPONSE_CACHE_TTL)),
+        )
         .route("/pageview", post(store_pageview))
         .route("/favicon.ico", get(favicon))
         .fallback(not_found)
@@ -79,17 +92,25 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, ServiceExt::<Request>::into_make_service(app)).await.unwrap();
+    axum::serve(listener, ServiceExt::<Request>::into_make_service(app))
+        .await
+        .unwrap();
 }
 
 fn get_jenv() -> Environment<'static> {
     let mut env = Environment::new();
-    env.add_template("layout", include_str!("./templates/layout.html")).unwrap();
-    env.add_template("home", include_str!("./templates/home.html")).unwrap();
-    env.add_template("post", include_str!("./templates/post.html")).unwrap();
-    env.add_template("feed", include_str!("./templates/feed.xml")).unwrap();
-    env.add_template("style", include_str!("./templates/style.css")).unwrap();
-    env.add_template("pageview", include_str!("./templates/pageview.js")).unwrap();
+    env.add_template("layout", include_str!("./templates/layout.html"))
+        .unwrap();
+    env.add_template("home", include_str!("./templates/home.html"))
+        .unwrap();
+    env.add_template("post", include_str!("./templates/post.html"))
+        .unwrap();
+    env.add_template("feed", include_str!("./templates/feed.xml"))
+        .unwrap();
+    env.add_template("style", include_str!("./templates/style.css"))
+        .unwrap();
+    env.add_template("pageview", include_str!("./templates/pageview.js"))
+        .unwrap();
     env.add_function("format_date", format_date);
     env.set_trim_blocks(true);
     env.set_lstrip_blocks(true);
@@ -97,14 +118,14 @@ fn get_jenv() -> Environment<'static> {
     env
 }
 
-
-
 fn format_date(date_str: String, short: bool) -> String {
-    let Ok(date) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") else { return date_str };
+    let Ok(date) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") else {
+        return date_str;
+    };
     if short {
-        return format!("{}", date.format("%b %d, %Y"))
+        return format!("{}", date.format("%b %d, %Y"));
     } else {
-        return format!("{}", date.format("%B %d, %Y"))
+        return format!("{}", date.format("%B %d, %Y"));
     }
 }
 
@@ -234,7 +255,6 @@ async fn atom_feed(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     (headers, rendered)
 }
 
-
 #[derive(Deserialize)]
 struct Pageview {
     path: String,
@@ -252,7 +272,6 @@ async fn store_pageview(State(state): State<Arc<AppState>>, Json(view): Json<Pag
     return ();
 }
 
-
 fn persistence_thread(state: Arc<AppState>) {
     loop {
         thread::sleep(time::Duration::from_secs(60));
@@ -260,18 +279,19 @@ fn persistence_thread(state: Arc<AppState>) {
     }
 }
 
-
 fn persist_views(state: Arc<AppState>) {
     let page_hits = state.page_hits.lock().unwrap();
     let db = state.db.lock().unwrap();
 
     page_hits.iter().for_each(|(k, v)| {
-        let _ = db.execute("
+        let _ = db.execute(
+            "
             INSERT INTO page_hits (post, hits) values (?1, ?2)
                 ON CONFLICT(post) DO UPDATE SET hits= ?3
-            ", (k, v, v));
+            ",
+            (k, v, v),
+        );
     })
-
 }
 
 fn restore_views(state: Arc<AppState>) {
@@ -282,9 +302,9 @@ fn restore_views(state: Arc<AppState>) {
 
     let mut query = db.prepare("select post, hits from page_hits").unwrap();
 
-    let stat_iter = query.query_map([], |row| {
-        Ok(StatRow(row.get(0)?, row.get(1)?))
-    }).unwrap();
+    let stat_iter = query
+        .query_map([], |row| Ok(StatRow(row.get(0)?, row.get(1)?)))
+        .unwrap();
 
     for stat in stat_iter {
         let stat = stat.unwrap();
@@ -294,11 +314,15 @@ fn restore_views(state: Arc<AppState>) {
 
 fn get_db() -> Connection {
     let db = Connection::open(DB_LOCATION).unwrap();
-    db.execute("
+    db.execute(
+        "
         CREATE TABLE IF NOT EXISTS page_hits (
             post TEXT PRIMARY KEY,
             hits INTEGER
-        )", ()).unwrap();
+        )",
+        (),
+    )
+    .unwrap();
 
     db
 }
