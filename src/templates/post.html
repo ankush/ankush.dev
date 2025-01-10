@@ -19,6 +19,11 @@
 {% endfor %}
 {%- endif -%}
 
+{%- if post.meta.external_url -%}
+<p>Note: This is an external post that first appeared on <a href="{{ post.meta.external_url }}">{{ post.meta.external_url }}</a>.</p>
+<hr>
+{%- endif -%}
+
 <article>
 {{ post.content }}
 </article>
