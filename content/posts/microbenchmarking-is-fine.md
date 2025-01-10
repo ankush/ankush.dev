@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Microbenchmarks NOT Considered Harmful"
+title:  "Microbenchmarks Considered Useful"
 description: ""
 date: 2025-01-09
 external_url: "https://frappe.io/blog/engineering/TBD"
@@ -13,12 +13,10 @@ published: false
 > -- [ThePrimeGen](https://www.youtube.com/shorts/4OoqBk3nhyY) [0] (Professional YouTuber/Yapper)
 
 
-
-This isn't unique to Prime, it's a common sentiment on the web that microbenchmarks are not truthful and often meaningless. Before we dissect the usefulness of microbenchmarks, let's first understand some basics of microbenchmarking.
+I heard that while I was working on microbenchmarks that measured small Python functions in microseconds and even nanoseconds. So I felt obliged to counter this sentiment. It's not unique to Prime, it's a common sentiment on the web that microbenchmarks are not truthful and often meaningless. Before we dissect the usefulness of microbenchmarks, let's first understand some basics of microbenchmarking.
 
 
 ### What is microbenchmarking?
-
 
 Microbenchmarks are small snippets of code, often just 2-10 lines that are run in a loop many times to get precise timing information. This is how you'd benchmark a very small function call:
 
@@ -33,7 +31,7 @@ for _ in range(20):          # outer loop
     measurements.append(avg_time)
 ```
 
-Notice that each function call is not individually timed because that can lead to disturbance in the results if that function is very fast i.e. on the order of a few microseconds. Writing code like this manually for benchmarks is prone to many errors and lack of repeatability. Picking the proper number for outer and inner loops is also something we can outsource to another program. So developers usually use utilities like Python's `timeit`, which takes care of estimating how many inner and outer loops are required for getting reliable and repeatable results.
+Notice that each function call is not individually timed because that can lead to disturbance in the results if that function is very fast i.e. on the order of a few microseconds. Writing code like this manually for benchmarks is prone to errors and lack of repeatability. Picking the proper number for outer and inner loops for a given time budget is also something we can outsource to another program. So developers usually use utilities like Python's `timeit`, which takes care of estimating how many inner and outer loops are required for getting reliable and repeatable results.
 
 ### What is wrong with microbenchmarking?
 
@@ -98,8 +96,6 @@ Like everything else in computer science, the answer to the usefulness of microb
 >
 > -- Richard Feynman
 
-
 ---
 
-
-[0] I know that statement is out of context, but he decided to upload that short clip out of context so ...
+[0] I know that statement is out of context, but he also decided to upload that short clip out of context.
