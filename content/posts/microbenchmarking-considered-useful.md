@@ -4,16 +4,15 @@ title:  "Microbenchmarks Considered Useful"
 description: ""
 date: 2025-01-09
 external_url: "https://frappe.io/blog/engineering/TBD"
-published: false
 ---
 
 
 > "Gosh darn it, you're not worried about microseconds... if you're using JavaScript and the next thing out of your mouth is 'I'm worried about microseconds', don't use JavaScript"
 >
-> -- [ThePrimeGen](https://www.youtube.com/shorts/4OoqBk3nhyY) [0] (Professional YouTuber/Yapper)
+> -- [ThePrimeGen](https://www.youtube.com/shorts/4OoqBk3nhyY) (Professional YouTuber/Yapper)  [0]
 
 
-I heard that while I was working on microbenchmarks that measured small Python functions in microseconds and even nanoseconds. So I felt obliged to counter this sentiment. It's not unique to Prime, it's a common sentiment on the web that microbenchmarks are not truthful and often meaningless. Before we dissect the usefulness of microbenchmarks, let's first understand some basics of microbenchmarking.
+Last month I started the practice of [Performance Engineering](https://github.com/frappe/caffeine) at Frappe with the singular goal of *improving performance of everything by 2x* (we'll revisit what this means later). I saw that Prime clip that while I was working on microbenchmarks that measured small Python operations in microseconds or even nanoseconds. So I felt obliged to counter this sentiment. It's not unique to Prime, it's a common sentiment on the web that microbenchmarks are not truthful and often meaningless. Before we dissect the usefulness of microbenchmarks, let's first understand some basics of microbenchmarking.
 
 
 ### What is microbenchmarking?
@@ -47,7 +46,7 @@ Any program is the sum of its parts, then what is wrong with this way of timing 
 
 Despite all the criticism, microbenchmarks are everywhere. Surely, it's not *just* for marketing purposes?
 
-I started the practice of ["Performance Engineering"](https://github.com/frappe/caffeine) at Frappe last month with the singular goal of *improving performance by 2x*. That is a vague statement and I am not even going to explain what it means yet. The first problem I had to deal with was "where to even begin?"
+The goal of *improving performance of everything by 2x* is quite vague and it's not even worth trying to explain what it means just yet. However you interpret it, one thing is for sure: we want big performance improvements. The first problem I had to deal with was "where to even begin?"
 
 I know our codebase fairly well. I've worked on all 3 major projects at Frappe - Frappe Framework, ERPNext, Press, and many other smaller projects. So I have a pretty good idea of what is executing on the CPU *most of the time*. It won't be a surprise to read that a web framework made for business apps spends most of its time in:
 
