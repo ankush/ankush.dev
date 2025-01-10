@@ -52,7 +52,7 @@ I started the practice of ["Performance Engineering"](https://github.com/frappe/
 I know our codebase fairly well. I've worked on all 3 major projects at Frappe - Frappe Framework, ERPNext, Press, and many other smaller projects. So I have a pretty good idea of what is executing on the CPU *most of the time*. It won't be a surprise to read that a web framework made for business apps spends most of its time in:
 
 - Database abstractions and SQL Queries
-- Retrieving frequently used data from the cache
+- Retrieving [frequently used data from the cache](https://ankush.dev/p/flamegraph-missing-forest-for-trees)
 - ORM abstractions for CRUD operations
 - Small utils that are used everywhere - configurations, math, datetime, etc
 
