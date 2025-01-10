@@ -3,7 +3,7 @@ layout: post
 title:  "Microbenchmarks Considered Useful"
 description: ""
 date: 2025-01-09
-external_url: "https://frappe.io/blog/engineering/TBD"
+external_url: "https://frappe.io/blog/engineering/microbenchmarks-considered-useful"
 ---
 
 
