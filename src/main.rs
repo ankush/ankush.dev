@@ -1,4 +1,4 @@
-use axum::extract::{Json, Path, Request, State};
+use axum::extract::{Json, Path, Request, State, Query};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Redirect};
 use axum::ServiceExt;
@@ -238,14 +238,22 @@ impl From<DirEntry> for Post {
     }
 }
 
-async fn atom_feed(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+#[derive(Deserialize)]
+struct FeedOptions {
+    no_external_posts: Option<bool>,
+}
+
+async fn atom_feed(State(state): State<Arc<AppState>>, options: Query<FeedOptions>) -> impl IntoResponse {
     // Reference: https://datatracker.ietf.org/doc/html/rfc4287
     let template = state.env.get_template("feed").unwrap();
+
+    let allow_external_posts = !options.no_external_posts.unwrap_or(false);
+    let posts = state.posts.iter().filter(|p| allow_external_posts || p.meta.external_url.is_none()).collect::<Vec<_>>();
 
     let rendered = template
         .render(context! {
             title => "Ankush Menat's Blog",
-            posts => state.posts.iter().filter(|p| p.meta.external_url.is_none()).collect::<Vec<_>>(),
+            posts => posts,
             author => "Ankush Menat",
             BASE_URL => BASE_URL,
         })

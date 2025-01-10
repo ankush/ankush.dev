@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.7.9", features = ["http1", "tokio", "json"], default-features = false }
+axum = { version = "0.7.9", features = ["http1", "tokio", "json", "query"], default-features = false }
 axum-response-cache = "0.1.1"
 chrono = { version = "0.4.38", features = ["alloc", "serde"], default-features = false }
 markdown = "1.0.0-alpha.17"
